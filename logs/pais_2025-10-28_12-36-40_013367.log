@@ -1,0 +1,7 @@
+2025-10-28 12:36:59.055 | INFO     | main:<module>:101 - ✅ 已建立新集合 'pais_knowledge_base'
+2025-10-28 12:36:59.070 | INFO     | main:startup_event:609 - 🚀 PAIS 系統啟動 (LangChain Powered)
+2025-10-28 12:36:59.071 | INFO     | main:startup_event:610 - 📍 Qdrant: qdrant:6333
+2025-10-28 12:36:59.072 | INFO     | main:startup_event:611 - 📚 集合: pais_knowledge_base
+2025-10-28 12:36:59.072 | INFO     | main:startup_event:612 - 🤖 Agents: 3 工具
+2025-10-28 12:36:59.073 | INFO     | main:startup_event:613 - 🧠 Memory: ConversationBufferMemory
+2025-10-28 12:42:54.834 | INFO     | main:shutdown_event:621 - ⏹ PAIS 系統關閉

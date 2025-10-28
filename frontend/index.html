@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>桃園市民政通</title>
+  <link rel="stylesheet" href="index.css"/>
+</head>
+<body>
+  <header class="header">
+    <div class="header-content">
+      <div class="logo">
+        <img src="/frontend/image/taoyuan.png" alt="桃園市" class="photo" />
+        <div class="title-section">
+          <h1>桃園市民政通</h1>
+          <p>Taoyuan City CivicLink</p>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:18px;color:#515661">問政無礙<br>民意常在</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-container">
+    <section class="chat-section">
+      <div class="chat-header">
+        <h2>民政相通～萬事皆通</h2>
+      </div>
+
+      <div class="chat-messages" id="chatMessages">
+        <div class="message">
+          <div class="message-avatar ai-avatar">政</div>
+          <div class="message-content ai-message">
+            嗨～我是<span style="font-weight:700">善寶助理</span>
+            幫你快速說明政策與政見。今天想聊哪個議題呢？
+          </div>
+        </div>
+      </div>
+
+      <div class="chat-input">
+        <div class="input-container">
+          <textarea id="messageInput" class="input-field" placeholder="請輸入您的問題（按 Enter 送出）..."></textarea>
+          <div class="input-actions">
+            <button class="action-btn send-btn" id="sendBtn" title="發送">➤</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-title">🏛️桃園市政府聯絡資訊</div>
+    <div class="footer-content">
+      <div class="footer-section">
+        <h3>主機關電話</h3>
+        <p>(03) 3322-101</p>
+        <p style="font-size:12px; color:#6b7280;">地址：桃園市桃園區縣府路1號</p>
+      </div>
+      <div class="footer-section">
+        <h3>聯絡郵件</h3>
+        <p>service@tycg.gov.tw</p>
+        <p>建議與申訴：suggest@tycg.gov.tw</p>
+      </div>
+      <div class="footer-section">
+        <h3>處室分機</h3>
+        <p>秘書室：1001｜民政處：2001</p>
+        <p>教育局：3001｜社會局：4001</p>
+        <p>工務局：5001｜環境局：6001</p>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      &copy; 2025 桃園市政府 | 
+      <a href="#">隱私政策</a>
+      <a href="#">使用條款</a>
+      <a href="#">網站地圖</a>
+    </div>
+  </footer>
+
+  <script src="index.js"></script>
+</body>
+</html>

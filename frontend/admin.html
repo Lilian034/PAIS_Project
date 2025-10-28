@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>政務分身管理系統</title>
+    <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <div class="nav-avatar">管</div>
+            <div class="nav-title">
+                <h1>政務分身管理系統</h1>
+                <p>Political AI Management System</p>
+            </div>
+        </div>
+        <div class="nav-user">
+            <span class="user-name">王市長</span>
+            <button class="logout-btn">登出</button>
+        </div>
+    </nav>
+
+    <div class="container">
+        <aside class="sidebar">
+            <ul class="nav-menu">
+                <li class="nav-item active" data-tab="documents">
+                    <span class="nav-icon">📄</span>
+                    <span>政策文檔管理</span>
+                </li>
+                <li class="nav-item" data-tab="media">
+                    <span class="nav-icon">🎬</span>
+                    <span>多媒體資料</span>
+                </li>
+                <li class="nav-item" data-tab="voice">
+                    <span class="nav-icon">🎤</span>
+                    <span>語音設定</span>
+                </li>
+                <li class="nav-item" data-tab="realtime">
+                    <span class="nav-icon">💬</span>
+                    <span>即時互動</span>
+                </li>
+                <li class="nav-item" data-tab="content-gen">
+                    <span class="nav-icon">✍️</span>
+                    <span>文宣生成</span>
+                </li>
+                <li class="nav-item" data-tab="review">
+                    <span class="nav-icon">✅</span>
+                    <span>內容審核</span>
+                </li>
+                <li class="nav-item" data-tab="exposure">
+                    <span class="nav-icon">📊</span>
+                    <span>數據監控</span>
+                </li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <!-- 政策文檔管理 -->
+            <section id="documents" class="tab-content active">
+                <div class="content-header">
+                    <h2>政策文檔管理</h2>
+                    <p>上傳政策文件到知識庫，供AI學習和回答使用</p>
+                </div>
+
+                <div class="upload-section">
+                    <div class="upload-box">
+                        <div class="upload-icon">📁</div>
+                        <h3>上傳政策文檔</h3>
+                        <p>支援 PDF、Word、Excel 格式</p>
+                        <input type="file" id="documentUpload" accept=".pdf,.doc,.docx,.xls,.xlsx" multiple>
+                        <button class="upload-btn" onclick="document.getElementById('documentUpload').click()">
+                            選擇文件
+                        </button>
+                    </div>
+                </div>
+
+                <div class="documents-list">
+                    <h3>已上傳文檔</h3>
+                    <div class="list-header">
+                        <span>文件名稱</span>
+                        <span>類型</span>
+                        <span>上傳時間</span>
+                        <span>狀態</span>
+                        <span>操作</span>
+                    </div>
+                    <div class="document-item">
+                        <span>教育政策白皮書.pdf</span>
+                        <span class="file-type">政策文件</span>
+                        <span>2024-01-15 10:30</span>
+                        <span class="status processed">已處理</span>
+                        <div class="actions">
+                            <button class="btn-small">編輯</button>
+                            <button class="btn-small danger">刪除</button>
+                        </div>
+                    </div>
+                    <div class="document-item">
+                        <span>市政規劃報告.docx</span>
+                        <span class="file-type">規劃文件</span>
+                        <span>2024-01-14 15:45</span>
+                        <span class="status processing">處理中</span>
+                        <div class="actions">
+                            <button class="btn-small">編輯</button>
+                            <button class="btn-small danger">刪除</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 多媒體資料 -->
+            <section id="media" class="tab-content">
+                <div class="content-header">
+                    <h2>多媒體資料管理</h2>
+                    <p>上傳語音、照片等資料，用於生成卡通形象和語音回答</p>
+                </div>
+
+                <div class="media-grid">
+                    <div class="media-card">
+                        <h3>📸 照片資料</h3>
+                        <div class="media-preview">
+                            <div class="photo-grid">
+                                <div class="photo-item">
+                                    <div class="photo-placeholder">照片1</div>
+                                </div>
+                                <div class="photo-item">
+                                    <div class="photo-placeholder">照片2</div>
+                                </div>
+                                <div class="photo-item add-photo" onclick="document.getElementById('photoUpload').click()">
+                                    <span>+</span>
+                                </div>
+                            </div>
+                        </div>
+                        <input type="file" id="photoUpload" accept="image/*" multiple style="display: none;">
+                        <button class="media-btn">管理照片</button>
+                    </div>
+
+                    <div class="media-card">
+                        <h3>🎤 語音樣本</h3>
+                        <div class="media-preview">
+                            <div class="audio-list">
+                                <div class="audio-item">
+                                    <span>語音樣本1.mp3</span>
+                                    <button class="play-btn">▶️</button>
+                                </div>
+                                <div class="audio-item">
+                                    <span>語音樣本2.mp3</span>
+                                    <button class="play-btn">▶️</button>
+                                </div>
+                            </div>
+                        </div>
+                        <input type="file" id="audioUpload" accept="audio/*" multiple style="display: none;">
+                        <button class="media-btn" onclick="document.getElementById('audioUpload').click()">上傳語音</button>
+                    </div>
+
+                    <div class="media-card">
+                        <h3>🎬 卡通形象</h3>
+                        <div class="media-preview">
+                            <div class="avatar-preview">
+                                <div class="generated-avatar">
+                                    <div class="avatar-placeholder">👤</div>
+                                </div>
+                            </div>
+                        </div>
+                        <button class="media-btn generate">生成形象</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 語音設定 -->
+            <section id="voice" class="tab-content">
+                <div class="content-header">
+                    <h2>語音設定</h2>
+                    <p>選擇和調整不同的音色設定</p>
+                </div>
+
+                <div class="voice-section">
+                    <div class="voice-selection">
+                        <h3>音色選擇</h3>
+                        <div class="voice-grid">
+                            <div class="voice-option active">
+                                <div class="voice-avatar male">👨</div>
+                                <h4>男性音色 A</h4>
+                                <p>沉穩、權威感</p>
+                                <button class="voice-test">試聽</button>
+                            </div>
+                            <div class="voice-option">
+                                <div class="voice-avatar male">👨‍💼</div>
+                                <h4>男性音色 B</h4>
+                                <p>親和、溫暖</p>
+                                <button class="voice-test">試聽</button>
+                            </div>
+                            <div class="voice-option">
+                                <div class="voice-avatar female">👩</div>
+                                <h4>女性音色 A</h4>
+                                <p>專業、清晰</p>
+                                <button class="voice-test">試聽</button>
+                            </div>
+                            <div class="voice-option">
+                                <div class="voice-avatar female">👩‍💼</div>
+                                <h4>女性音色 B</h4>
+                                <p>溫柔、親切</p>
+                                <button class="voice-test">試聽</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="voice-settings">
+                        <h3>語音參數調整</h3>
+                        <div class="setting-group">
+                            <label>語速調整</label>
+                            <input type="range" min="0.5" max="2" value="1" step="0.1" class="slider">
+                            <span class="value">1.0x</span>
+                        </div>
+                        <div class="setting-group">
+                            <label>音調高低</label>
+                            <input type="range" min="-10" max="10" value="0" step="1" class="slider">
+                            <span class="value">0</span>
+                        </div>
+                        <div class="setting-group">
+                            <label>音量大小</label>
+                            <input type="range" min="0" max="100" value="80" step="5" class="slider">
+                            <span class="value">80%</span>
+                        </div>
+                        <button class="save-settings">保存設定</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 即時互動 -->
+            <section id="realtime" class="tab-content">
+                <div class="content-header">
+                    <h2>即時互動管理</h2>
+                    <p>監控與民眾的即時對話，必要時可介入回應</p>
+                </div>
+
+                <div class="realtime-container">
+                    <div class="conversation-list">
+                        <div class="conversation-header">
+                            <h3>進行中的對話</h3>
+                            <span class="online-count">🟢 8 位民眾在線</span>
+                        </div>
+                        <div class="conversation-items" id="conversationList">
+                            <div class="conversation-item active" data-user="user1">
+                                <div class="conv-avatar">👤</div>
+                                <div class="conv-info">
+                                    <h4>張先生</h4>
+                                    <p class="conv-preview">請問教育政策...</p>
+                                    <span class="conv-time">剛剛</span>
+                                </div>
+                                <span class="unread-badge">2</span>
+                            </div>
+                            <div class="conversation-item" data-user="user2">
+                                <div class="conv-avatar">👤</div>
+                                <div class="conv-info">
+                                    <h4>李小姐</h4>
+                                    <p class="conv-preview">市政規劃相關問題</p>
+                                    <span class="conv-time">2分鐘前</span>
+                                </div>
+                            </div>
+                            <div class="conversation-item" data-user="user3">
+                                <div class="conv-avatar">👤</div>
+                                <div class="conv-info">
+                                    <h4>王太太</h4>
+                                    <p class="conv-preview">環境保護問題</p>
+                                    <span class="conv-time">5分鐘前</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="chat-panel">
+                        <div class="chat-header">
+                            <h3>與 張先生 的對話</h3>
+                            <div class="chat-actions">
+                                <button class="btn-small">查看資料</button>
+                                <button class="btn-small">結束對話</button>
+                            </div>
+                        </div>
+                        <div class="chat-messages" id="chatMessages">
+                            <div class="message user-message">
+                                <div class="message-content">
+                                    <p>請問市長對於教育政策有什麼新的規劃嗎？</p>
+                                    <span class="message-time">14:30</span>
+                                </div>
+                            </div>
+                            <div class="message ai-message">
+                                <div class="message-avatar">🤖</div>
+                                <div class="message-content">
+                                    <p>根據我們的教育政策白皮書，我們計劃在未來三年內投入50億元改善教育環境...</p>
+                                    <span class="message-time">14:30</span>
+                                    <span class="ai-label">AI回應</span>
+                                </div>
+                            </div>
+                            <div class="message user-message">
+                                <div class="message-content">
+                                    <p>具體會有哪些措施呢？</p>
+                                    <span class="message-time">14:32</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="chat-input-area">
+                            <div class="intervention-notice">
+                                <span>⚠️ 人工介入模式</span>
+                                <button class="toggle-mode">切換自動回應</button>
+                            </div>
+                            <div class="chat-input-box">
+                                <textarea id="messageInput" placeholder="輸入訊息...可以人工介入回應"></textarea>
+                                <button class="send-btn" onclick="sendMessage()">發送</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 文宣生成 -->
+            <section id="content-gen" class="tab-content">
+                <div class="content-header">
+                    <h2>文宣生成</h2>
+                    <p>基於知識庫自動生成各類文宣內容</p>
+                </div>
+
+                <div class="content-gen-container">
+                    <div class="gen-input-section">
+                        <h3>生成需求</h3>
+                        <div class="form-group">
+                            <label>內容類型</label>
+                            <select id="contentType" class="form-control">
+                                <option value="facebook">Facebook 貼文</option>
+                                <option value="instagram">Instagram 貼文</option>
+                                <option value="press">新聞稿</option>
+                                <option value="poster">宣傳海報文案</option>
+                                <option value="speech">演講稿</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>生成指令</label>
+                            <textarea id="genPrompt" class="form-control" rows="4" placeholder="例如：需要一篇臉書文案，宣傳市長去花蓮鏟土，邀請民眾一起盡一份心力"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>參考來源</label>
+                            <div class="source-tags">
+                                <span class="tag active">知識庫</span>
+                                <span class="tag">教育政策白皮書</span>
+                                <span class="tag">市政規劃報告</span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>風格設定</label>
+                            <div class="style-options">
+                                <label class="radio-option">
+                                    <input type="radio" name="style" value="formal" checked>
+                                    <span>正式專業</span>
+                                </label>
+                                <label class="radio-option">
+                                    <input type="radio" name="style" value="friendly">
+                                    <span>親切溫暖</span>
+                                </label>
+                                <label class="radio-option">
+                                    <input type="radio" name="style" value="inspiring">
+                                    <span>激勵鼓舞</span>
+                                </label>
+                            </div>
+                        </div>
+                        <button class="generate-btn" onclick="generateContent()">
+                            <span>✨</span> 生成內容
+                        </button>
+                    </div>
+
+                    <div class="gen-output-section">
+                        <h3>生成結果</h3>
+                        <div id="generatedContent" class="generated-content">
+                            <div class="placeholder-text">
+                                <div class="placeholder-icon">📝</div>
+                                <p>輸入生成指令後，AI將根據知識庫內容生成文宣</p>
+                            </div>
+                        </div>
+                        <div class="output-actions">
+                            <button class="action-btn" onclick="copyContent()">📋 複製</button>
+                            <button class="action-btn" onclick="regenerateContent()">🔄 重新生成</button>
+                            <button class="action-btn primary" onclick="submitForReview()">✅ 提交審核</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="gen-history">
+                    <h3>生成記錄</h3>
+                    <div class="history-list">
+                        <div class="history-item">
+                            <div class="history-info">
+                                <h4>Facebook 貼文 - 教育政策宣傳</h4>
+                                <p>2024-01-20 15:30</p>
+                            </div>
+                            <div class="history-status">
+                                <span class="status-badge approved">已核准</span>
+                            </div>
+                        </div>
+                        <div class="history-item">
+                            <div class="history-info">
+                                <h4>新聞稿 - 市政建設報告</h4>
+                                <p>2024-01-20 14:15</p>
+                            </div>
+                            <div class="history-status">
+                                <span class="status-badge pending">審核中</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 內容審核 -->
+            <section id="review" class="tab-content">
+                <div class="content-header">
+                    <h2>內容審核流程</h2>
+                    <p>秘書處統一審核各單位提交的內容，確保品牌形象一致</p>
+                </div>
+
+                <div class="review-stats">
+                    <div class="review-stat-card">
+                        <h3>15</h3>
+                        <p>待審核</p>
+                    </div>
+                    <div class="review-stat-card">
+                        <h3>42</h3>
+                        <p>本週已審</p>
+                    </div>
+                    <div class="review-stat-card">
+                        <h3>89%</h3>
+                        <p>通過率</p>
+                    </div>
+                </div>
+
+                <div class="review-filters">
+                    <button class="filter-btn active" data-filter="all">全部 (15)</button>
+                    <button class="filter-btn" data-filter="pending">待審核 (8)</button>
+                    <button class="filter-btn" data-filter="approved">已通過 (5)</button>
+                    <button class="filter-btn" data-filter="rejected">已駁回 (2)</button>
+                </div>
+
+                <div class="review-list">
+                    <div class="review-item" data-status="pending">
+                        <div class="review-header">
+                            <div class="review-meta">
+                                <span class="department-tag">水利局</span>
+                                <h4>Facebook 貼文 - 防汛宣導</h4>
+                                <span class="review-time">30分鐘前提交</span>
+                            </div>
+                            <span class="status-badge pending">待審核</span>
+                        </div>
+                        <div class="review-content">
+                            <p>親愛的市民朋友們，汛期即將來臨，市府已完成各項防汛準備工作。請大家務必...</p>
+                        </div>
+                        <div class="review-actions">
+                            <button class="btn-review approve" onclick="reviewContent(this, 'approve')">✓ 核准</button>
+                            <button class="btn-review reject" onclick="reviewContent(this, 'reject')">✗ 駁回</button>
+                            <button class="btn-review edit" onclick="reviewContent(this, 'edit')">✎ 修改建議</button>
+                        </div>
+                    </div>
+
+                    <div class="review-item" data-status="pending">
+                        <div class="review-header">
+                            <div class="review-meta">
+                                <span class="department-tag">教育局</span>
+                                <h4>新聞稿 - 校園安全措施</h4>
+                                <span class="review-time">1小時前提交</span>
+                            </div>
+                            <span class="status-badge pending">待審核</span>
+                        </div>
+                        <div class="review-content">
+                            <p>為確保學童安全，本市將在所有國小增設智慧監控系統，並加強校園周邊巡邏...</p>
+                        </div>
+                        <div class="review-actions">
+                            <button class="btn-review approve" onclick="reviewContent(this, 'approve')">✓ 核准</button>
+                            <button class="btn-review reject" onclick="reviewContent(this, 'reject')">✗ 駁回</button>
+                            <button class="btn-review edit" onclick="reviewContent(this, 'edit')">✎ 修改建議</button>
+                        </div>
+                    </div>
+
+                    <div class="review-item" data-status="approved">
+                        <div class="review-header">
+                            <div class="review-meta">
+                                <span class="department-tag">環保局</span>
+                                <h4>Instagram 貼文 - 環保活動</h4>
+                                <span class="review-time">2小時前</span>
+                            </div>
+                            <span class="status-badge approved">已核准</span>
+                        </div>
+                        <div class="review-content">
+                            <p>一起守護我們的家園！本週六環保淨灘活動歡迎大家報名參加...</p>
+                        </div>
+                        <div class="review-note">
+                            <span class="reviewer">審核：王秘書</span>
+                            <span class="review-comment">內容符合市府形象，核准發布</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 曝光數據 -->
+            <section id="exposure" class="tab-content">
+                <div class="content-header">
+                    <h2>曝光數據追蹤</h2>
+                    <p>追蹤政務分身在各平台的曝光情況</p>
+                </div>
+
+                <div class="exposure-summary">
+                    <div class="exposure-card">
+                        <div class="exposure-icon">👁️</div>
+                        <div class="exposure-data">
+                            <h3>125,678</h3>
+                            <p>總瀏覽數</p>
+                        </div>
+                        <div class="exposure-trend">+15.3%</div>
+                    </div>
+                    <div class="exposure-card">
+                        <div class="exposure-icon">🌐</div>
+                        <div class="exposure-data">
+                            <h3>12</h3>
+                            <p>活躍網址</p>
+                        </div>
+                    </div>
+                    <div class="exposure-card">
+                        <div class="exposure-icon">📱</div>
+                        <div class="exposure-data">
+                            <h3>8,456</h3>
+                            <p>今日瀏覽</p>
+                        </div>
+                        <div class="exposure-trend">+8.2%</div>
+                    </div>
+                </div>
+
+                <div class="url-manager">
+                    <div class="url-header">
+                        <h3>網址管理</h3>
+                        <button class="add-url-btn" onclick="showAddUrlModal()">+ 新增網址</button>
+                    </div>
+                    <div class="url-list">
+                        <div class="url-item">
+                            <div class="url-info">
+                                <span class="url-icon">🌐</span>
+                                <div class="url-details">
+                                    <h4>市府官網 - 市長專區</h4>
+                                    <a href="#" class="url-link">https://www.city.gov.tw/mayor</a>
+                                </div>
+                            </div>
+                            <div class="url-stats">
+                                <div class="stat-item">
+                                    <span class="stat-label">今日</span>
+                                    <span class="stat-value">2,345</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">本週</span>
+                                    <span class="stat-value">15,678</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">總計</span>
+                                    <span class="stat-value">45,890</span>
+                                </div>
+                            </div>
+                            <div class="url-actions">
+                                <button class="btn-icon" title="查看詳情">📊</button>
+                                <button class="btn-icon" title="編輯">✏️</button>
+                                <button class="btn-icon danger" title="刪除">🗑️</button>
+                            </div>
+                        </div>
+
+                        <div class="url-item">
+                            <div class="url-info">
+                                <span class="url-icon">📘</span>
+                                <div class="url-details">
+                                    <h4>Facebook 粉絲專頁</h4>
+                                    <a href="#" class="url-link">https://facebook.com/mayor.wang</a>
+                                </div>
+                            </div>
+                            <div class="url-stats">
+                                <div class="stat-item">
+                                    <span class="stat-label">今日</span>
+                                    <span class="stat-value">5,678</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">本週</span>
+                                    <span class="stat-value">42,345</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">總計</span>
+                                    <span class="stat-value">78,901</span>
+                                </div>
+                            </div>
+                            <div class="url-actions">
+                                <button class="btn-icon" title="查看詳情">📊</button>
+                                <button class="btn-icon" title="編輯">✏️</button>
+                                <button class="btn-icon danger" title="刪除">🗑️</button>
+                            </div>
+                        </div>
+
+                        <div class="url-item">
+                            <div class="url-info">
+                                <span class="url-icon">📸</span>
+                                <div class="url-details">
+                                    <h4>Instagram 官方帳號</h4>
+                                    <a href="#" class="url-link">https://instagram.com/mayor.wang</a>
+                                </div>
+                            </div>
+                            <div class="url-stats">
+                                <div class="stat-item">
+                                    <span class="stat-label">今日</span>
+                                    <span class="stat-value">1,234</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">本週</span>
+                                    <span class="stat-value">8,901</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">總計</span>
+                                    <span class="stat-value">23,456</span>
+                                </div>
+                            </div>
+                            <div class="url-actions">
+                                <button class="btn-icon" title="查看詳情">📊</button>
+                                <button class="btn-icon" title="編輯">✏️</button>
+                                <button class="btn-icon danger" title="刪除">🗑️</button>
+                            </div>
+                        </div>
+                    </div>
+                <script>
+    // 監聽側邊欄點擊事件
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.addEventListener('click', function() {
+            // 移除所有 nav-item 的 active
+            document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+            // 加上當前點擊的 active
+            this.classList.add('active');
+
+            // 隱藏所有 tab-content
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+
+            // 取得 data-tab 屬性，顯示對應 section
+            const targetId = this.getAttribute('data-tab');
+            document.getElementById(targetId).classList.add('active');
+        });
+    });
+</script>
