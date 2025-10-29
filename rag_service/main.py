@@ -69,7 +69,7 @@ app.add_middleware(
 
 # Gemini LLM
 llm = GoogleGenerativeAI(
-    model="gemini-pro",
+    model="gemini-2.0-flash-exp",
     google_api_key=GEMINI_API_KEY,
     temperature=0.7,
     max_output_tokens=2048
@@ -83,7 +83,7 @@ embeddings = GoogleGenerativeAIEmbeddings(
 
 # 使用本地 HuggingFace Embeddings（免費，不需要 API）
 embeddings = HuggingFaceEmbeddings(
-    model_name="sentence-transformers/all-mpnet-base-v2",
+    model_name="sentence-transformers/all-MiniLM-L6-v2",
     model_kwargs={'device': 'cpu'}
 )
 
@@ -181,9 +181,7 @@ tools = [
 
 # ==================== LangChain Agent 定義 ====================
 
-AGENT_PROMPT = """你是市長的智能 AI 助理「善寶」，負責與民眾互動。
-
-你的職責：
+AGENT_PROMPT = """你是市長張善政的 AI 分身「善寶」，你的任務是：
 1. 使用市長親切、專業的語氣回答問題
 2. 根據知識庫提供準確資訊
 3. 保持對話的連貫性和記憶
@@ -202,7 +200,12 @@ Action Input: 工具的輸入
 Observation: 工具的輸出
 ... (重複 Thought/Action/Observation 直到有答案)
 Thought: 我現在知道最終答案了
-Final Answer: 最終回答
+Final Answer: [這裡寫你的完整回答，不要有任何前綴]
+
+重要規則:
+- Final Answer 後面直接寫答案，不要有 "市民您好" 之類的重複
+- 答案要簡潔親切，不要太長
+- 如果知識庫沒有資料，誠實告知並建議聯繫市府
 
 對話記錄：
 {chat_history}
@@ -350,6 +353,10 @@ async def chat(request: ChatRequest):
     """
     對話 API (LangChain Agent + Memory)
     """
+    reply = None
+    sources = []
+    thought_process = None
+
     try:
         logger.info(f"💬 [{request.session_id}] 問題: {request.message}")
         
@@ -397,7 +404,22 @@ async def chat(request: ChatRequest):
         
     except Exception as e:
         logger.error(f"❌ 對話錯誤: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"處理失敗: {str(e)}")
+        if 'result' in locals():
+            logger.info(f"🔍 嘗試從 result 提取回覆")
+            if isinstance(result, dict):
+                reply = result.get("output") or result.get("answer") or str(result)
+            else:
+                reply = str(result)
+        
+        return ChatResponse(
+            reply=reply,
+            sources=[],
+            session_id=request.session_id,
+            timestamp=datetime.now().isoformat(),
+            thought_process=None
+        )
+    
+    raise HTTPException(status_code=500, detail=f"處理失敗: {str(e)}")
 
 @app.post("/api/generate")
 async def generate_content(

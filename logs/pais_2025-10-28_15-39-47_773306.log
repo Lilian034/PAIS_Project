@@ -35,3 +35,4 @@
 2025-10-28 15:45:17.957 | INFO     | main:chat:354 - 💬 [user_1761594695328_0abijzwq3] 問題: 張善政市長交通政策是什麼
 2025-10-28 15:45:17.960 | INFO     | main:get_memory:122 - 🧠 建立新記憶: user_1761594695328_0abijzwq3
 2025-10-28 15:45:48.201 | ERROR    | main:chat:399 - ❌ 對話錯誤: 404 models/gemini-pro is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+2025-10-29 11:08:37.660 | INFO     | main:shutdown_event:621 - ⏹ PAIS 系統關閉

@@ -1,5 +1,6 @@
 // ==================== 桃園市民政通 - 前端 JS ====================
 // 連接到 FastAPI 後端 (LangChain + Gemini)
+
 let chatHistory = [];
 let sessionId = null;
 

@@ -1,0 +1,10 @@
+2025-10-29 12:43:04.678 | INFO     | main:<module>:95 - ✅ 集合 'pais_knowledge_base' 已存在
+2025-10-29 12:43:04.694 | INFO     | main:startup_event:627 - 🚀 PAIS 系統啟動 (LangChain Powered)
+2025-10-29 12:43:04.695 | INFO     | main:startup_event:628 - 📍 Qdrant: qdrant:6333
+2025-10-29 12:43:04.696 | INFO     | main:startup_event:629 - 📚 集合: pais_knowledge_base
+2025-10-29 12:43:04.696 | INFO     | main:startup_event:630 - 🤖 Agents: 3 工具
+2025-10-29 12:43:04.697 | INFO     | main:startup_event:631 - 🧠 Memory: ConversationBufferMemory
+2025-10-29 12:43:26.507 | INFO     | main:chat:357 - 💬 [user_1761594695328_0abijzwq3] 問題: 張善政的交通政策是什麼？
+2025-10-29 12:43:26.511 | INFO     | main:get_memory:122 - 🧠 建立新記憶: user_1761594695328_0abijzwq3
+2025-10-29 12:43:36.961 | ERROR    | main:chat:402 - ❌ 對話錯誤: 'answer'
+2025-10-29 12:51:28.056 | INFO     | main:shutdown_event:639 - ⏹ PAIS 系統關閉
