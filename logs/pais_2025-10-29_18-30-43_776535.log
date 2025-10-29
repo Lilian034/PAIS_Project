@@ -1,0 +1,31 @@
+2025-10-29 18:31:30.780 | INFO     | main:<module>:89 - ✅ 集合 'pais_knowledge_base' 已存在
+2025-10-29 18:31:30.783 | INFO     | main:<module>:234 - ✅ ReAct Agent 創建成功
+2025-10-29 18:31:30.795 | INFO     | main:startup_event:858 - ==================================================
+2025-10-29 18:31:30.796 | INFO     | main:startup_event:859 - 🚀 PAIS 系統啟動 (LangChain Powered)
+2025-10-29 18:31:30.796 | INFO     | main:startup_event:860 -  FastAPI 版本: 2.0.4
+2025-10-29 18:31:30.797 | INFO     | main:startup_event:861 - 📍 Qdrant Host: qdrant:6333
+2025-10-29 18:31:30.797 | INFO     | main:startup_event:862 - 📚 Qdrant 集合: pais_knowledge_base
+2025-10-29 18:31:30.797 | INFO     | main:startup_event:863 - 🧠 LLM 模型: gemini-2.0-flash
+2025-10-29 18:31:30.798 | INFO     | main:startup_event:864 - 🔡 Embedding 模型: moka-ai/m3e-base (維度: 768)
+2025-10-29 18:31:30.798 | INFO     | main:startup_event:865 - 🤖 Agent 狀態: ✅ 已啟用
+2025-10-29 18:31:30.798 | INFO     | main:startup_event:866 - 🛠️ Agent 工具數量: 2
+2025-10-29 18:31:30.798 | INFO     | main:startup_event:867 - 💾 Memory 類型: ConversationBufferMemory + FileChatMessageHistory
+2025-10-29 18:31:30.799 | INFO     | main:startup_event:868 - ==================================================
+2025-10-29 18:32:26.560 | INFO     | main:chat:405 - 💬 [user_1761594695328_0abijzwq3] 收到問題: 你好
+2025-10-29 18:32:26.561 | INFO     | main:get_memory:123 - 🧠 建立新記憶: user_1761594695328_0abijzwq3 (檔案: chat_history/user_1761594695328_0abijzwq3.json)
+2025-10-29 18:32:26.562 | INFO     | main:chat:424 - 🚀 [user_1761594695328_0abijzwq3] 開始執行 Agent...
+2025-10-29 18:32:27.842 | INFO     | main:chat:426 - ✅ [user_1761594695328_0abijzwq3] Agent 執行完成
+2025-10-29 18:32:27.842 | INFO     | main:chat:466 - 🤖 [user_1761594695328_0abijzwq3] 最終回覆 (前100字): 你好！很高興再次為您服務，有什麼我可以幫忙的嗎？...
+2025-10-29 18:32:34.806 | INFO     | main:chat:405 - 💬 [user_1761594695328_0abijzwq3] 收到問題: 你叫甚麼
+2025-10-29 18:32:34.807 | INFO     | main:chat:424 - 🚀 [user_1761594695328_0abijzwq3] 開始執行 Agent...
+2025-10-29 18:32:36.038 | INFO     | main:chat:426 - ✅ [user_1761594695328_0abijzwq3] Agent 執行完成
+2025-10-29 18:32:36.038 | INFO     | main:chat:466 - 🤖 [user_1761594695328_0abijzwq3] 最終回覆 (前100字): 市民您好，我是桃園市長張善政的AI分身，大家可以叫我「善寶」！很高興認識您。...
+2025-10-29 18:32:53.504 | INFO     | main:chat:405 - 💬 [user_1761594695328_0abijzwq3] 收到問題: 張善政市長生日是幾號
+2025-10-29 18:32:53.505 | INFO     | main:chat:424 - 🚀 [user_1761594695328_0abijzwq3] 開始執行 Agent...
+2025-10-29 18:32:54.755 | INFO     | main:search_knowledge_base:134 - 🛠️ 使用工具 [搜尋知識庫]，查詢: 張善政市長生日
+2025-10-29 18:32:55.091 | INFO     | main:search_knowledge_base:140 - ✅ 工具 [搜尋知識庫] 找到 3 筆資料
+2025-10-29 18:33:00.023 | INFO     | main:chat:426 - ✅ [user_1761594695328_0abijzwq3] Agent 執行完成
+2025-10-29 18:33:00.023 | INFO     | main:chat:466 - 🤖 [user_1761594695328_0abijzwq3] 最終回覆 (前100字): Agent stopped due to iteration limit or time limit....
+2025-10-29 18:40:45.141 | INFO     | main:shutdown_event:872 - ==================================================
+2025-10-29 18:40:45.142 | INFO     | main:shutdown_event:873 - ⏹ PAIS 系統正在關閉...
+2025-10-29 18:40:45.142 | INFO     | main:shutdown_event:874 - ==================================================

@@ -124,7 +124,7 @@
   /* AI 使用漸層背景 */
 .ai-avatar{
     background:linear-gradient(135deg, #43b0f1, #6ec8ff);
-    background-image:url('/frontend/image/shanbao_headshot.png');
+    background-image:url('/image/shanbao_headshot.png');
     background-size:cover;
     background-position:center;
     color:transparent;

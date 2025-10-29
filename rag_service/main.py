@@ -1,5 +1,6 @@
 import os
 import json
+import re # 匯入正規表達式模組
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from pathlib import Path
@@ -53,7 +54,7 @@ logger.add("logs/pais_{time}.log", rotation="1 day", retention="30 days")
 app = FastAPI(
     title="PAIS - 政務分身智能系統 (LangChain Powered)",
     description="基於 LangChain 的市長聊天機器人 (Agents + Memory + RAG + Tools)",
-    version="2.0.2" # 版本更新
+    version="2.0.6" # 版本更新
 )
 
 # CORS
@@ -97,7 +98,6 @@ except Exception:
         logger.info(f"✅ 已建立新集合 '{COLLECTION_NAME}'")
     except Exception as create_err:
         logger.error(f"❌ 建立集合 '{COLLECTION_NAME}' 失敗: {create_err}")
-        # 如果無法建立集合，後續的 vectorstore 初始化可能會失敗
 
 vectorstore = Qdrant(
     client=qdrant_client,
@@ -112,7 +112,6 @@ def get_memory(session_id: str) -> ConversationBufferMemory:
     """取得或建立對話記憶"""
     if session_id not in memory_store:
         try:
-            # 確保 chat_history 目錄存在
             Path("chat_history").mkdir(exist_ok=True)
             history_file = f"chat_history/{session_id}.json"
             message_history = FileChatMessageHistory(history_file)
@@ -121,12 +120,10 @@ def get_memory(session_id: str) -> ConversationBufferMemory:
                 chat_memory=message_history,
                 memory_key="chat_history",
                 return_messages=True
-                # output_key 會在 chat 函數中動態設定
             )
             logger.info(f"🧠 建立新記憶: {session_id} (檔案: {history_file})")
         except Exception as mem_err:
             logger.error(f"❌ 建立記憶體失敗 ({session_id}): {mem_err}")
-            # 返回一個臨時的記憶體以避免崩潰，但歷史記錄不會保存
             return ConversationBufferMemory(memory_key="chat_history", return_messages=True)
             
     return memory_store[session_id]
@@ -140,8 +137,13 @@ def search_knowledge_base(query: str) -> str:
         retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
         docs = retriever.invoke(query) # 使用 invoke
         if docs:
-            result = "\n\n".join([f"來源 {i+1} ({doc.metadata.get('source', '未知')[-30:]}):\n{doc.page_content}" for i, doc in enumerate(docs)])
+            # 只取 page_content，避免 metadata 過長
+            result = "\n\n".join([doc.page_content for doc in docs])
             logger.info(f"✅ 工具 [搜尋知識庫] 找到 {len(docs)} 筆資料")
+            # 限制回傳給 Agent 的長度，避免 Prompt 過長
+            max_obs_length = 1500 
+            if len(result) > max_obs_length:
+                 result = result[:max_obs_length] + "... (內容過長截斷)"
             return f"找到相關資料：\n{result}"
         else:
             logger.warning(f"⚠️ 工具 [搜尋知識庫] 未找到資料 for query: {query}")
@@ -154,11 +156,14 @@ def get_policy_info(policy_name: str) -> str:
     """取得特定政策資訊工具"""
     logger.info(f"🛠️ 使用工具 [查詢政策]，政策名稱: {policy_name}")
     try:
-        # 使用 similarity_search 可能更適合直接找特定名稱
-        docs = vectorstore.similarity_search(policy_name, k=2)
+        docs = vectorstore.similarity_search(policy_name, k=1) # 只取最相關的 1 筆
         if docs:
-            result = f"來源 ({docs[0].metadata.get('source', '未知')[-30:]}):\n{docs[0].page_content}"
+            result = docs[0].page_content
             logger.info(f"✅ 工具 [查詢政策] 找到資料 for policy: {policy_name}")
+            # 限制回傳給 Agent 的長度
+            max_obs_length = 1500
+            if len(result) > max_obs_length:
+                 result = result[:max_obs_length] + "... (內容過長截斷)"
             return f"關於 '{policy_name}' 的資訊：{result}"
         else:
             logger.warning(f"⚠️ 工具 [查詢政策] 未找到資料 for policy: {policy_name}")
@@ -183,7 +188,7 @@ tools = [
 
 # ==================== LangChain Agent 定義 ====================
 
-# --- 修正 Agent Prompt ---
+# --- 再次修正 Agent Prompt，強化 Final Answer 格式要求 ---
 AGENT_PROMPT = """你是桃園市長張善政的 AI 分身「善寶」，一個親切、專業、略帶幽默感的 AI 助理。你的任務是根據提供的工具和對話記錄，以市長的口吻回答市民的問題。
 
 **你的回答風格：**
@@ -196,22 +201,40 @@ AGENT_PROMPT = """你是桃園市長張善政的 AI 分身「善寶」，一個�
 
 **可用工具：**
 {tools}
+**工具名稱列表 (你不需要在回答中使用這個列表):**
+{tool_names}
 
-**使用工具的思考流程 (ReAct 格式)：**
+**你【必須嚴格】遵守以下的思考與回應格式 (ReAct 格式)：**
 Question: 使用者提出的問題。
-Thought: 仔細分析問題。判斷是否需要使用工具？
-    * 如果是**簡單問候** (例如：你好、你是誰)，或**常識性問題**，或者涉及**敏感話題**，**不需要**使用工具，可以直接思考 Final Answer。
-    * 如果是關於**市政、政策、市長理念/發言/背景**的問題，**需要**使用工具。選擇最適合的工具 (搜尋知識庫 或 查詢特定政策名稱)。決定 Action Input (要查詢的關鍵字或政策名稱)。
-Action: 選擇的工具名稱 (例如：搜尋知識庫)。
-Action Input: 提供給工具的輸入 (例如：桃園市社會住宅進度)。
-Observation: 工具返回的結果 (可能是找到的資料，或 "找不到資料" 的訊息)。
-Thought: 檢視 Observation。
-    * 如果找到滿意的資料，根據資料和對話記錄，以市長口吻組織 Final Answer。
-    * 如果工具返回 "找不到資料" 或資料不相關，**不要**再次嘗試**相同**的查詢。思考是否可以用**不同**的關鍵字再試一次「搜尋知識庫」(最多嘗試 1-2 次不同的關鍵字)。如果還是找不到，就在 Final Answer 中**誠實說明**找不到具體細節，並提供一般性建議。**絕對不要**幻想或編造答案。
-    * 如果工具返回錯誤訊息，也在 Final Answer 中說明查詢時遇到問題。
-Final Answer: [**這裡直接寫出**你最終要給使用者的完整回覆，用市長的口吻，**不要包含** "Final Answer:" 這個標籤本身。]
+Thought: [你的思考過程，說明你打算做什麼]。
+Action: [你選擇的工具名稱，例如：搜尋知識庫]。 **【只有在你需要使用工具時才寫這行和下一行】**
+Action Input: [提供給工具的輸入，例如：桃園市社會住宅進度]。
+Observation: [工具返回的結果。這會由系統自動填入]。
+Thought: [檢視 Observation 後的思考，判斷是否需要再次使用工具，或可以直接回答]。
+... (可以重複 Action/Action Input/Observation/Thought 流程) ...
+Thought: 我現在已經有足夠的資訊，可以給出最終的答案了。 **【在給出最終答案前，必須有這句 Thought】**
+Final Answer: [**這裡【直接】寫出**你最終要給使用者的【完整回覆內容】，**【只需要】**包含最終答案本身，**【絕對不要】**包含任何前面的 Thought, Action, Action Input, Observation 文字。回答要自然、完整，符合市長口吻。]
 
-**重要：** 即使你知道答案，如果問題涉及市政或政策細節，**也應該優先使用工具**確認資訊的準確性。除非是像「你是誰」這種基本自我介紹。
+**【再次強調最終格式】：**
+你的整個輸出流的【最後一部分】**必須**是：
+Thought: 我現在已經有足夠的資訊，可以給出最終的答案了。
+Final Answer: [市長口吻的完整回答內容...]
+
+**【錯誤示範】(不要這樣做！)：**
+Thought: 我需要查資料。
+Action: 搜尋知識庫
+Action Input: 交通
+Observation: 找到資料...
+Thought: 我知道了。
+Final Answer: Thought: 我知道了。\n市民您好，交通政策是...  <--- **這是錯的！Final Answer 裡包含了 Thought！**
+
+**【正確示範】：**
+Thought: 我需要查資料。
+Action: 搜尋知識庫
+Action Input: 交通政策
+Observation: 找到資料...
+Thought: 我現在已經有足夠的資訊，可以給出最終的答案了。
+Final Answer: 市民您好！桃園的交通建設是市府團隊非常重視的一環。根據我找到的資料...... <--- **這是對的！只有乾淨的回答。**
 
 **對話記錄 (最近的對話)：**
 {chat_history}
@@ -221,10 +244,10 @@ Final Answer: [**這裡直接寫出**你最終要給使用者的完整回覆，�
 Question: {input}
 Thought: {agent_scratchpad}"""
 
+
 agent_prompt = PromptTemplate(
     template=AGENT_PROMPT,
-    # --- 修正：移除 'tool_names' ---
-    input_variables=["input", "chat_history", "agent_scratchpad", "tools"]
+    input_variables=["input", "chat_history", "agent_scratchpad", "tools", "tool_names"]
 )
 
 # 創建 Agent
@@ -236,7 +259,12 @@ try:
     )
     logger.info("✅ ReAct Agent 創建成功")
 except Exception as agent_create_err:
-    logger.error(f"❌ 創建 Agent 失敗: {agent_create_err}", exc_info=True)
+    try:
+        # --- 修正: 將錯誤物件轉為字串再格式化 ---
+        logger.error(f"❌ 創建 Agent 失敗: {str(agent_create_err)}", exc_info=True)
+    except Exception as log_err:
+        # 如果 logger 本身也出錯，提供備用日誌
+        logger.error(f"❌ 創建 Agent 失敗，且 Logger 也發生錯誤: {log_err}")
     agent = None # 標記 Agent 創建失敗
 
 # ==================== Pydantic 模型 ====================
@@ -266,7 +294,6 @@ class IngestRequest(BaseModel):
 # (保持不變)
 def verify_admin(authorization: Optional[str] = Header(None)):
     """驗證管理員權限"""
-    # 實際應用應使用更安全的驗證方式
     if not ADMIN_PASSWORD or authorization != f"Bearer {ADMIN_PASSWORD}":
         logger.warning(f"🚫 管理員權限驗證失敗: {authorization}")
         raise HTTPException(status_code=401, detail="未授權或未設定管理員密碼")
@@ -280,7 +307,6 @@ def load_document(file_path: str):
         if file_extension == ".pdf":
             loader = PyPDFLoader(file_path)
         elif file_extension in [".docx", ".doc"]:
-            # 確保已安裝 python-docx 和 docx2txt
             try:
                 import docx2txt # 檢查是否安裝
                 loader = Docx2txtLoader(file_path)
@@ -288,18 +314,15 @@ def load_document(file_path: str):
                 logger.error("❌ 缺少 'docx2txt' 模組，無法讀取 .docx 文件。請執行 'pip install docx2txt'")
                 return []
         elif file_extension == ".txt":
-            # 嘗試用 utf-8 開啟，失敗則嘗試系統預設編碼
             try:
                 loader = TextLoader(file_path, encoding="utf-8")
-                # 嘗試讀取一小部分以觸發可能的解碼錯誤
                 loader.load()[0].page_content[:10]
             except UnicodeDecodeError:
                 logger.warning(f"⚠️ 使用 UTF-8 讀取 {file_path} 失敗，嘗試系統預設編碼...")
                 loader = TextLoader(file_path) # 使用系統預設
-            except Exception as txt_err: # 捕捉其他可能的讀取錯誤
+            except Exception as txt_err:
                  logger.error(f"❌ 讀取 TXT 文件 {file_path} 時發生非預期的錯誤: {txt_err}")
                  return []
-
         else:
             logger.warning(f"⚠️ 不支援的檔案類型: {file_extension} ({file_path})")
             return []
@@ -313,6 +336,74 @@ def load_document(file_path: str):
     except Exception as e:
         logger.error(f"❌ 載入文件 {file_path} 失敗: {e}", exc_info=True)
         return []
+
+# --- 新增：清理 Agent 輸出的函數 ---
+def extract_final_answer(agent_output: str) -> str:
+    """從 Agent 的原始輸出中提取 Final Answer 部分"""
+    if not agent_output: # 檢查空字串
+        return ""
+
+    logger.debug(f"原始 Agent 輸出 (前 500 字): {agent_output[:500]}...")
+
+    # 使用 re.IGNORECASE (或 re.I) 忽略大小寫
+    # 尋找最後一個 "Final Answer:"
+    matches = list(re.finditer(r"Final Answer:\s*(.*)", agent_output, re.DOTALL | re.IGNORECASE))
+
+    if matches:
+        # 取最後一個匹配項之後的所有內容
+        last_match = matches[-1]
+        final_answer = agent_output[last_match.end(1):].strip() # 從 group(1) 結束後開始取
+        # 如果 group(1) 本身就是答案 (沒有後續內容)
+        if not final_answer and last_match.group(1):
+            final_answer = last_match.group(1).strip()
+
+        logger.debug(f"提取到的 Final Answer (前 200 字): {final_answer[:200]}...")
+
+        # 再次檢查是否仍然包含 "Thought:" 或 "Action:" (LLM 可能不完全遵守)
+        # 這裡的邏輯保持不變，嘗試做二次清理
+        if "Thought:" in final_answer[:20] or "Action:" in final_answer[:20]:
+             logger.warning("⚠️ Final Answer 中可能仍包含 Agent 思考過程，嘗試再次清理...")
+             last_thought_match = list(re.finditer(r"Thought:", final_answer, re.IGNORECASE))
+             last_action_match = list(re.finditer(r"Action:", final_answer, re.IGNORECASE))
+             last_obs_match = list(re.finditer(r"Observation:", final_answer, re.IGNORECASE))
+
+             last_marker_pos = -1
+             if last_thought_match: last_marker_pos = max(last_marker_pos, last_thought_match[-1].start())
+             if last_action_match: last_marker_pos = max(last_marker_pos, last_action_match[-1].start())
+             if last_obs_match: last_marker_pos = max(last_marker_pos, last_obs_match[-1].start())
+
+             if last_marker_pos != -1:
+                  next_newline = final_answer.find('\n', last_marker_pos)
+                  if next_newline != -1:
+                       cleaned_answer = final_answer[next_newline:].strip()
+                       if cleaned_answer:
+                            logger.debug(f"二次清理後的 Answer (前 200 字): {cleaned_answer[:200]}...")
+                            return cleaned_answer
+                       else:
+                            logger.warning("⚠️ 二次清理後答案為空，返回原始提取內容")
+                            return final_answer
+                  else:
+                       return final_answer
+             else:
+                  return final_answer
+        else: # 沒有包含其他標記，是乾淨的
+             return final_answer
+    else:
+        # 如果找不到 "Final Answer:"
+        logger.warning("⚠️ 未在 Agent 輸出中找到 'Final Answer:' 標記。")
+        # 檢查是否 LLM 把答案直接放在最後一個 "Thought:" 之後
+        thought_matches = list(re.finditer(r"Thought:(.*)", agent_output, re.IGNORECASE))
+        if thought_matches:
+            last_thought_content = thought_matches[-1].group(1).strip()
+            # 檢查最後一個 Thought 後面是否緊接著 Action 或 Observation
+            remaining_text = agent_output[thought_matches[-1].end():]
+            if "Action:" not in remaining_text and "Observation:" not in remaining_text and len(last_thought_content) > 30: # 簡單判斷
+                 logger.warning("⚠️ 嘗試使用最後一個 'Thought:' 後的內容作為答案。")
+                 return last_thought_content
+
+        logger.warning("⚠️ 無法可靠提取答案，返回原始輸出 (可能不完整或包含思考)。")
+        return agent_output.strip() # 直接返回原始輸出
+
 
 # ==================== Prompt 模板 ====================
 # (保持不變)
@@ -362,7 +453,6 @@ CONTENT_PROMPT = PromptTemplate(
 
 @app.get("/")
 async def root():
-    # ... (保持不變)
     return {
         "system": "PAIS 政務分身智能系統",
         "version": app.version,
@@ -372,7 +462,6 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    # ... (保持不變)
     qdrant_ok = False
     llm_ok = False
     agent_ok = agent is not None
@@ -384,9 +473,7 @@ async def health_check():
         error_msg += f"Qdrant 連接失敗: {e}; "
         logger.error(f"❌ 健康檢查 - Qdrant 連接失敗: {e}")
 
-    # 暫時假設 LLM 正常，避免 API Key 消耗
-    llm_ok = True
-
+    llm_ok = True # 暫時假設 LLM 正常
 
     status = "healthy" if qdrant_ok and llm_ok and agent_ok else "unhealthy"
 
@@ -407,8 +494,8 @@ async def chat(request: ChatRequest):
     sources: List[str] = []
     thought_process_str: Optional[str] = None
     result: Optional[Dict[str, Any]] = None
-
     session_id = request.session_id or "default"
+    raw_agent_output: Optional[str] = None # 用於儲存 Agent 原始輸出
 
     try:
         logger.info(f"💬 [{session_id}] 收到問題: {request.message}")
@@ -420,62 +507,71 @@ async def chat(request: ChatRequest):
         memory = get_memory(session_id)
 
         if request.use_agent:
-            # --- 為 Agent 動態設定 output_key ---
             memory.output_key = "output"
-
             agent_executor = AgentExecutor(
                 agent=agent,
                 tools=tools,
                 memory=memory,
-                verbose=True, # 保留詳細日誌以供除錯
-                # --- 增加 Agent 執行次數 ---
-                max_iterations=5, # 從 3 增加到 5
-                handle_parsing_errors=True, # 繼續處理可能的 LLM 格式錯誤
+                verbose=True,
+                max_iterations=5,
+                handle_parsing_errors=True, # 讓 Agent 嘗試自我修正格式錯誤
             )
 
             logger.info(f"🚀 [{session_id}] 開始執行 Agent...")
-            result = agent_executor.invoke({"input": request.message})
-            logger.info(f"✅ [{session_id}] Agent 執行完成")
+            try:
+                result = agent_executor.invoke({"input": request.message})
+                raw_agent_output = result.get("output") # 取得原始輸出
 
-            # Agent 的回覆固定在 'output'
-            reply = result.get("output", reply) # 使用 get 並提供預設值
+                if raw_agent_output:
+                     # --- 加入後處理：提取乾淨的 Final Answer ---
+                     reply = extract_final_answer(raw_agent_output)
+                     # 如果清理後是空的，或還是包含思考過程 (清理失敗)
+                     if not reply or "Thought:" in reply[:20] or "Action:" in reply[:20]:
+                         logger.warning(f"⚠️ 清理後 Final Answer 為空或仍包含思考，使用預設錯誤回覆 ({session_id})")
+                         # 檢查原始輸出是否就是答案 (適用於 Agent 沒找到 Final Answer: 但直接回答)
+                         # 並且原始輸出長度大於一定值，避免只是簡單的 "OK" 或錯誤訊息
+                         if len(raw_agent_output) > 30 and "Thought:" not in raw_agent_output[:50]:
+                              reply = raw_agent_output # 假設原始輸出就是答案
+                         else:
+                              reply = "抱歉，我好像有點詞窮了，可以換個方式問嗎？" # 維持預設錯誤
+                else:
+                     logger.warning(f"⚠️ Agent 執行結果中缺少 'output' ({session_id})")
+                     # reply 會保持為預設錯誤訊息
 
-            # 嘗試提取思考過程 (注意：intermediate_steps 可能很長)
-            intermediate_steps = result.get("intermediate_steps")
-            if intermediate_steps:
-                 # 轉換為較易讀的字串格式，只取部分關鍵資訊
-                 try:
-                     thought_process_str = "\n---\n".join([
-                         f"Thought: {step[0].log.strip()}\nAction: {step[0].tool}({step[0].tool_input})\nObservation: {str(step[1])[:200]}..." # 限制 Observation 長度
-                         for step in intermediate_steps
-                     ])
-                 except Exception as fmt_err:
-                     logger.warning(f"⚠️ 無法格式化 intermediate_steps: {fmt_err}")
-                     thought_process_str = str(intermediate_steps)[:1000] + "..." # 截斷原始字串
+            except Exception as agent_exec_err:
+                 logger.error(f"❌ AgentExecutor.invoke 執行失敗 ({session_id}): {agent_exec_err}", exc_info=True)
+                 reply = f"抱歉，我在處理您的問題時遇到了一些困難 ({type(agent_exec_err).__name__})。請您換個方式再問一次，或聯繫管理員。"
+                 result = {"error": str(agent_exec_err)} # 記錄錯誤
+
+            logger.info(f"✅ [{session_id}] Agent 執行完成 (或捕捉到錯誤)")
+
+            # --- 思考過程改用原始輸出 ---
+            if raw_agent_output:
+                # 限制長度，避免傳給前端的資料過大
+                thought_process_str = raw_agent_output[:2000] + ("..." if len(raw_agent_output) > 2000 else "")
+            elif "error" in result:
+                 thought_process_str = f"Agent 執行錯誤: {result['error'][:1000]}..."
             else:
-                 thought_process_str = "Agent 未使用工具或無中間步驟記錄。"
+                 thought_process_str = "Agent 未成功產生輸出。"
 
-            # Agent 目前不直接回傳 sources，但可以從思考過程中提取
-            sources = [] # 暫時不處理
+            sources = [] # Agent 模式下 sources 暫不處理
 
         else: # 使用 RAG Chain
-            # --- 為 RAG 鏈動態設定 output_key ---
             memory.output_key = "answer"
-
             qa_chain = ConversationalRetrievalChain.from_llm(
                 llm=llm,
                 retriever=vectorstore.as_retriever(search_kwargs={"k": 3}),
                 memory=memory,
                 combine_docs_chain_kwargs={"prompt": RAG_PROMPT},
                 return_source_documents=True,
-                verbose=True # RAG Chain 也開啟詳細日誌
+                verbose=True
             )
 
             logger.info(f"🚀 [{session_id}] 開始執行 RAG Chain...")
             result = qa_chain.invoke({"question": request.message})
             logger.info(f"✅ [{session_id}] RAG Chain 執行完成")
 
-            reply = result.get("answer", reply) # RAG chain 的回覆在 'answer'
+            reply = result.get("answer", reply)
             thought_process_str = "使用 RAG Chain 模式，無 ReAct 思考過程。"
             sources = [
                 doc.metadata.get("source", "未知來源").split('/')[-1] # 只取檔名
@@ -489,25 +585,22 @@ async def chat(request: ChatRequest):
             sources=list(set(sources)), # 去重
             session_id=session_id,
             timestamp=datetime.now().isoformat(),
-            thought_process=thought_process_str # 回傳思考過程字串
+            thought_process=thought_process_str
         )
 
+    # 主 try 區塊的 except
     except Exception as e:
-        # 增加 exc_info=True 來獲取更詳細的錯誤堆疊
-        logger.error(f"❌ 對話處理失敗 ({session_id}): {e}", exc_info=True)
-
-        # 錯誤時也嘗試記錄最後的 result (如果有的話)
-        error_thought_process = f"錯誤: {str(e)}"
-        if result:
+        logger.error(f"❌ 對話處理中發生未預期錯誤 ({session_id}): {e}", exc_info=True)
+        error_thought_process = f"系統層級錯誤: {str(e)}"
+        if result and isinstance(result, dict):
             error_thought_process += f"\n最後的 Agent/Chain 結果: {str(result)[:500]}..."
 
-        # 'reply' 已經有預設的錯誤訊息了
         return ChatResponse(
-            reply=reply, # 回傳預設的錯誤訊息
+            reply=reply,
             sources=[],
             session_id=session_id,
             timestamp=datetime.now().isoformat(),
-            thought_process=error_thought_process # 回傳錯誤詳情
+            thought_process=error_thought_process
         )
 
 # --- /api/generate 保持不變 ---
@@ -522,10 +615,10 @@ async def generate_content(
 
         context = "（無特別指定的參考資料）"
         relevant_docs = []
-        if request.context: # 如果前端有指定特定來源（未來可擴充）
+        if request.context:
              logger.info(f"🔍 使用指定 context 進行生成")
              context = request.context
-        else: # 預設從向量庫找相關資料
+        else:
             try:
                 retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
                 logger.info(f"🔍 從知識庫搜尋主題 '{request.topic}' 的參考資料...")
@@ -560,13 +653,11 @@ async def generate_content(
 
         logger.info(f"✅ 文案生成成功 (長度: {len(generated_content)})")
 
-        # --- 自動儲存生成的文案 ---
         try:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            # 清理 topic 作為檔名一部分
             safe_topic = "".join(c if c.isalnum() else "_" for c in request.topic[:20])
             output_file = Path("generated_content") / f"{timestamp}_{safe_topic}.txt"
-            output_file.parent.mkdir(exist_ok=True) # 確保目錄存在
+            output_file.parent.mkdir(exist_ok=True)
 
             with open(output_file, "w", encoding="utf-8") as f:
                 f.write(f"主題: {request.topic}\n")
@@ -579,20 +670,20 @@ async def generate_content(
             file_path_str = str(output_file)
         except Exception as save_err:
             logger.error(f"❌ 自動儲存文案失敗: {save_err}")
-            file_path_str = None # 儲存失敗
+            file_path_str = None
 
         return {
             "content": generated_content,
-            "file_path": file_path_str, # 回傳儲存路徑
+            "file_path": file_path_str,
             "sources": [
-                 doc.metadata.get("source", "未知來源").split('/')[-1] # 只取檔名
-                 for doc in relevant_docs # 使用前面搜尋到的 docs
+                 doc.metadata.get("source", "未知來源").split('/')[-1]
+                 for doc in relevant_docs
             ],
-            "context_used": len(relevant_docs) > 0 # 是否使用了知識庫 context
+            "context_used": len(relevant_docs) > 0
         }
 
     except HTTPException as http_exc:
-        raise http_exc # 把 HTTP 錯誤直接拋出
+        raise http_exc
     except Exception as e:
         logger.error(f"❌ 文案生成過程中發生未預期錯誤: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"文案生成失敗: {str(e)}")
@@ -618,7 +709,6 @@ async def ingest_documents(
         supported_extensions = [".pdf", ".docx", ".doc", ".txt"]
         logger.info(f"📚 開始處理資料夾: {folder_path}")
 
-        # 使用 rglob 遞迴搜尋
         files_to_process = [f for f in folder_path.rglob("*")
                             if f.is_file() and f.suffix.lower() in supported_extensions]
 
@@ -634,18 +724,16 @@ async def ingest_documents(
             docs = load_document(str(file_path))
             if docs:
                 for doc in docs:
-                    # 標準化 source 路徑
-                    relative_path = file_path.relative_to(Path.cwd()) # 相對於目前工作目錄的路徑
-                    doc.metadata["source"] = str(relative_path).replace("\\", "/") # 統一使用 /
+                    relative_path = file_path.relative_to(Path.cwd())
+                    doc.metadata["source"] = str(relative_path).replace("\\", "/")
                     doc.metadata["uploaded_at"] = datetime.now().isoformat()
                     doc.metadata["filename"] = file_path.name
 
                 text_splitter = RecursiveCharacterTextSplitter(
                     chunk_size=1000,
                     chunk_overlap=200,
-                    separators=["\n\n", "\n", "。", "！", "？", "，", "、", " ", ""], # 加入中文標點
+                    separators=["\n\n", "\n", "。", "！", "？", "，", "、", " ", ""],
                     length_function=len,
-                    # add_start_index = True # 可選，增加起始索引元數據
                 )
                 splits = text_splitter.split_documents(docs)
                 logger.info(f"📄 檔案 {file_path.name} 分割成 {len(splits)} 個片段")
@@ -663,7 +751,6 @@ async def ingest_documents(
         total_chunks_created = len(all_splits)
         logger.info(f"✅ 文件分割完成: 共 {processed_files_count} 個檔案, {total_chunks_created} 個片段。準備寫入向量資料庫...")
 
-        # 分批寫入 Qdrant，避免一次傳輸過大 payload
         batch_size = 100
         for i in range(0, total_chunks_created, batch_size):
             batch = all_splits[i:i + batch_size]
@@ -673,7 +760,6 @@ async def ingest_documents(
             except Exception as add_doc_err:
                  logger.error(f"❌ 寫入片段 {i} 到 {i+batch_size} 時失敗: {add_doc_err}", exc_info=True)
                  errors.append(f"部分資料寫入失敗: {add_doc_err}")
-                 # raise HTTPException(status_code=500, detail=f"部分資料寫入向量資料庫失敗: {add_doc_err}") # 中斷
 
         logger.info(f"✅ 所有片段已成功寫入向量資料庫 '{COLLECTION_NAME}'")
 
@@ -698,12 +784,10 @@ async def upload_file(
 ):
     """單個檔案上傳並直接加入知識庫"""
     try:
-        # --- 儲存上傳的檔案 ---
         upload_folder = Path("documents")
         upload_folder.mkdir(exist_ok=True)
         file_path = upload_folder / Path(file.filename).name
 
-        # 檢查檔名衝突，如果存在則加上 timestamp
         if file_path.exists():
              timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
              file_path = upload_folder / f"{file_path.stem}_{timestamp}{file_path.suffix}"
@@ -719,7 +803,6 @@ async def upload_file(
              logger.error(f"❌ 儲存上傳檔案失敗 ({file.filename}): {save_err}", exc_info=True)
              raise HTTPException(status_code=500, detail=f"儲存檔案失敗: {save_err}")
 
-        # --- 處理檔案並加入知識庫 (類似 ingest) ---
         logger.info(f"📚 開始處理單一檔案: {file_path}")
         docs = load_document(str(file_path))
 
@@ -883,7 +966,6 @@ async def get_stats():
 # --- 啟動與關閉事件保持不變 ---
 @app.on_event("startup")
 async def startup_event():
-    # 確保所有需要的目錄都存在
     Path("chat_history").mkdir(exist_ok=True)
     Path("generated_content").mkdir(exist_ok=True)
     Path("logs").mkdir(exist_ok=True)
@@ -905,7 +987,6 @@ async def startup_event():
 async def shutdown_event():
     logger.info("="*50)
     logger.info("⏹ PAIS 系統正在關閉...")
-    # 可以在這裡加入資源清理的程式碼，例如關閉資料庫連接
     logger.info("="*50)
 
 if __name__ == "__main__":
