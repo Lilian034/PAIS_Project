@@ -69,7 +69,7 @@ app.add_middleware(
 
 # Gemini LLM
 llm = GoogleGenerativeAI(
-    model="gemini-2.0-flash-exp",
+    model="gemini-2.0-flash",
     google_api_key=GEMINI_API_KEY,
     temperature=0.7,
     max_output_tokens=2048
@@ -83,7 +83,7 @@ embeddings = GoogleGenerativeAIEmbeddings(
 
 # 使用本地 HuggingFace Embeddings（免費，不需要 API）
 embeddings = HuggingFaceEmbeddings(
-    model_name="sentence-transformers/all-MiniLM-L6-v2",
+    model_name="moka-ai/m3e-base",
     model_kwargs={'device': 'cpu'}
 )
 
@@ -353,9 +353,11 @@ async def chat(request: ChatRequest):
     """
     對話 API (LangChain Agent + Memory)
     """
-    reply = None
-    sources = []
-    thought_process = None
+    # --- 修正 1: 將 reply 初始化為一個有效的 "預設錯誤" 字串 ---
+    reply: str = "哎呀，善寶好像有點累了，請稍後再試一次。"
+    sources: List[str] = []
+    thought_process: Optional[str] = None
+    result: Optional[Dict[str, Any]] = None # 將 result 移到 try 外部
 
     try:
         logger.info(f"💬 [{request.session_id}] 問題: {request.message}")
@@ -373,9 +375,9 @@ async def chat(request: ChatRequest):
             )
             
             result = agent_executor.invoke({"input": request.message})
-            reply = result["output"]
+            reply = result["output"] # Agent 的回覆在 'output'
             thought_process = result.get("intermediate_steps", "")
-            sources = []
+            sources = [] # Agent 目前不直接回傳 sources
             
         else:
             qa_chain = ConversationalRetrievalChain.from_llm(
@@ -387,13 +389,14 @@ async def chat(request: ChatRequest):
             )
             
             result = qa_chain({"question": request.message})
-            reply = result["answer"]
+            reply = result["answer"] # RAG chain 的回覆在 'answer'
             thought_process = None
             sources = [doc.metadata.get("source", "未知") 
                       for doc in result.get("source_documents", [])]
         
         logger.info(f"✅ 回答: {reply[:100]}...")
         
+        # 成功時的 return (reply 絕對是 str)
         return ChatResponse(
             reply=reply,
             sources=sources,
@@ -404,22 +407,36 @@ async def chat(request: ChatRequest):
         
     except Exception as e:
         logger.error(f"❌ 對話錯誤: {str(e)}")
-        if 'result' in locals():
+        
+        # --- 修正 2: 'reply' 已經有預設值了 ---
+        # 即使發生錯誤，我們仍然嘗試從 result (如果存在) 中挽救回覆
+        # 這段邏輯是您原本就有的，很好！
+        if result:
             logger.info(f"🔍 嘗試從 result 提取回覆")
             if isinstance(result, dict):
-                reply = result.get("output") or result.get("answer") or str(result)
+                # 檢查 'output' (for agent) 或 'answer' (for chain)
+                salvaged_reply = result.get("output") or result.get("answer")
+                if salvaged_reply:
+                    reply = salvaged_reply
             else:
-                reply = str(result)
+                reply = str(result) # 最後手段
         
+        # --- 修正 3: 錯誤時的回傳 ---
+        # 因為 'reply' 在 try 區塊開始時就被設為預設錯誤字串
+        # 即使 'result' 不存在或無法挽救，'reply' 也會是那個預設字串
+        # Pydantic 驗證 (ChatResponse) 將永遠通過
         return ChatResponse(
-            reply=reply,
+            reply=reply, # 這裡保證是 str
             sources=[],
             session_id=request.session_id,
             timestamp=datetime.now().isoformat(),
-            thought_process=None
+            thought_process=f"錯誤: {str(e)}" # 將錯誤訊息放在 thought_process
         )
     
-    raise HTTPException(status_code=500, detail=f"處理失敗: {str(e)}")
+    # --- 修正 4: 移除最後的 raise ---
+    # 我們不應該 raise HTTPException，因為我們已經用 ChatResponse 回傳了錯誤
+    # logger.error("❌ /api/chat 達到不應到達的程式碼行")
+    # raise HTTPException(status_code=500, detail=f"處理失敗: 未知的伺服器錯誤")
 
 @app.post("/api/generate")
 async def generate_content(
