@@ -1,51 +1,64 @@
 services:
-  # 1. Qdrant 向量資料庫
-  qdrant:
-    image: qdrant/qdrant:latest
-    container_name: pais-qdrant
-    ports:
-      - "6333:6333"
-      - "6334:6334"
-    volumes:
-      - qdrant_data:/qdrant/storage
-    restart: unless-stopped
-    networks:
-      - pais_network
-    healthcheck:
-      test: ["CMD-SHELL", "timeout 5s bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 40s
-
-  # 2. FastAPI 後端 (RAG + LangChain)
-  rag_api:
+  # ==================== 民眾問答系統 ====================
+  public_api:
     build: ./rag_service
-    container_name: pais-backend
+    container_name: pais-public-api
+    command: uvicorn public_service:app --host 0.0.0.0 --port 8000 --reload
     ports:
       - "8000:8000"
-    env_file:
-      - .env
+    volumes:
+      - ./rag_service:/app
+      - ./documents:/app/documents
+      - ./chat_history/public:/app/chat_history
+      - ./logs:/app/logs
+      - ./qdrant_storage:/app/qdrant_storage
     environment:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+    depends_on:
+      - qdrant
+    restart: unless-stopped
+
+  # ==================== 幕僚系統 ====================
+  staff_api:
+    build: ./rag_service
+    container_name: pais-staff-api
+    command: uvicorn staff_service:app --host 0.0.0.0 --port 8001 --reload
+    ports:
+      - "8001:8001"
     volumes:
       - ./rag_service:/app
       - ./documents:/app/documents
-      - ./chat_history:/app/chat_history
+      - ./chat_history/staff:/app/chat_history
       - ./generated_content:/app/generated_content
+      - ./database:/app/database
       - ./logs:/app/logs
+      - ./qdrant_storage:/app/qdrant_storage
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - STAFF_PASSWORD=${STAFF_PASSWORD}
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
+      - MAYOR_VOICE_ID=${MAYOR_VOICE_ID}
+      - RUNWAY_API_KEY=${RUNWAY_API_KEY}
     depends_on:
-      qdrant:
-        condition: service_healthy
-    networks:
-      - pais_network
+      - qdrant
     restart: unless-stopped
-    command: uvicorn main:app --host 0.0.0.0 --port 8000
 
-  # 3. Nginx 前端伺服器
+  # ==================== 向量資料庫 ====================
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: pais-qdrant
+    ports:
+      - "6333:6333"
+    volumes:
+      - ./qdrant_storage:/qdrant/storage
+    restart: unless-stopped
+
+  # ==================== Nginx 反向代理 ====================
   nginx:
     image: nginx:alpine
     container_name: pais-nginx
@@ -55,15 +68,6 @@ services:
       - ./frontend:/usr/share/nginx/html
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
-      - rag_api
-    networks:
-      - pais_network
+      - public_api
+      - staff_api
     restart: unless-stopped
-
-networks:
-  pais_network:
-    driver: bridge
-
-volumes:
-  qdrant_data:
-    driver: local
