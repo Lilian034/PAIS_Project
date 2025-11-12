@@ -1,0 +1,14 @@
+2025-11-12 08:43:26.209 | WARNING  | public_service:<module>:92 - ⚠️ 集合 'pais_knowledge_base' 不存在，嘗試建立...
+2025-11-12 08:43:26.694 | INFO     | public_service:<module>:98 - ✅ 已建立新集合 'pais_knowledge_base'
+2025-11-12 08:43:26.696 | INFO     | public_service:<module>:260 - ✅ ReAct Agent 創建成功
+2025-11-12 08:43:26.714 | INFO     | public_service:startup_event:974 - ==================================================
+2025-11-12 08:43:26.715 | INFO     | public_service:startup_event:975 - 🚀 PAIS 系統啟動 (LangChain Powered)
+2025-11-12 08:43:26.715 | INFO     | public_service:startup_event:976 -  FastAPI 版本: 2.0.6
+2025-11-12 08:43:26.716 | INFO     | public_service:startup_event:977 - 📍 Qdrant Host: qdrant:6333
+2025-11-12 08:43:26.716 | INFO     | public_service:startup_event:978 - 📚 Qdrant 集合: pais_knowledge_base
+2025-11-12 08:43:26.716 | INFO     | public_service:startup_event:979 - 🧠 LLM 模型: gemini-2.0-flash
+2025-11-12 08:43:26.716 | INFO     | public_service:startup_event:980 - 🔡 Embedding 模型: moka-ai/m3e-base (維度: 768)
+2025-11-12 08:43:26.717 | INFO     | public_service:startup_event:981 - 🤖 Agent 狀態: ✅ 已啟用
+2025-11-12 08:43:26.717 | INFO     | public_service:startup_event:982 - 🛠️ Agent 工具數量: 2
+2025-11-12 08:43:26.717 | INFO     | public_service:startup_event:983 - 💾 Memory 類型: ConversationBufferMemory + FileChatMessageHistory
+2025-11-12 08:43:26.718 | INFO     | public_service:startup_event:984 - ==================================================

@@ -40,7 +40,7 @@ function initDocumentManagement() {
     }
     
     initDocumentSearch();
-    initDocumentSort();
+    initDocumentSort()
 }
 
 function initDocumentSearch() {
@@ -71,11 +71,17 @@ function initDocumentSort() {
     
     applyBtn.addEventListener('click', () => {
         const mode = selectEl.value || 'newest';
-        const items = Array.from(listEl.querySelectorAll('.document-item'));
+        
+        // 只選擇 document-item 但排除 list-header
+        const items = Array.from(listEl.querySelectorAll('.document-item:not(.list-header)'));
+        
+        if (items.length === 0) {
+            showNotification('沒有可排序的項目', 'warning');
+            return;
+        }
         
         const keyed = items.map(el => ({
             el,
-            name: getFileName(el),
             ts: getTimeMs(el)
         }));
         
@@ -83,19 +89,15 @@ function initDocumentSort() {
             case 'oldest':
                 keyed.sort((a, b) => (a.ts || 0) - (b.ts || 0));
                 break;
-            case 'name-asc':
-                keyed.sort((a, b) => a.name.localeCompare(b.name));
-                break;
-            case 'name-desc':
-                keyed.sort((a, b) => b.name.localeCompare(a.name));
-                break;
             case 'newest':
             default:
                 keyed.sort((a, b) => (b.ts || 0) - (a.ts || 0));
                 break;
         }
         
+        // 重新排列(表頭會自動保持在最前面)
         keyed.forEach(k => listEl.appendChild(k.el));
+        
         showNotification('已套用排序', 'success');
     });
 }
@@ -408,6 +410,94 @@ function initVoiceGeneration() {
             option.classList.add('active');
         });
     });
+    
+    // 綁定「＋新增音檔」按鈕
+    const btnVoiceUpload = document.getElementById('btnVoiceUpload');
+    if (btnVoiceUpload) {
+        btnVoiceUpload.addEventListener('click', openAudioAddModal);
+    }
+    
+    // 初始化新增音檔彈窗
+    initAudioAddModal();
+}
+
+function initAudioAddModal() {
+    const addChooseBtn = document.getElementById('addChooseBtn');
+    const addAudioInput = document.getElementById('addAudioInput');
+    const addBtnClose = document.getElementById('addBtnClose');
+    const addBtnCreate = document.getElementById('addBtnCreate');
+    
+    if (!addChooseBtn || !addAudioInput) return;
+    
+    // 點擊「選擇檔案」按鈕
+    addChooseBtn.addEventListener('click', () => {
+        addAudioInput.click();
+    });
+    
+    // 選擇檔案後顯示檔名
+    addAudioInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            addChooseBtn.innerHTML = `<span style="color: #2f3f52; font-weight: 600;">📁 ${escapeHtml(file.name)}</span>`;
+        }
+    });
+    
+    // 關閉彈窗
+    if (addBtnClose) {
+        addBtnClose.addEventListener('click', closeAudioAddModal);
+    }
+    
+    // 新增音檔
+    if (addBtnCreate) {
+        addBtnCreate.addEventListener('click', () => {
+            const file = addAudioInput.files[0];
+            const emotion = document.getElementById('addEmotion')?.value.trim();
+            const source = document.getElementById('addSource')?.value.trim();
+            
+            if (!file) {
+                alert('請選擇音檔檔案');
+                return;
+            }
+            
+            if (!emotion) {
+                alert('請輸入情緒');
+                return;
+            }
+            
+            // 這裡可以加入實際的新增邏輯
+            showNotification(`已新增音檔: ${file.name}`, 'success');
+            closeAudioAddModal();
+        });
+    }
+}
+
+function openAudioAddModal() {
+    const modal = document.getElementById('audioAddModal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        modal.setAttribute('aria-hidden', 'false');
+    }
+    document.body.classList.add('no-scroll');
+}
+
+function closeAudioAddModal() {
+    const modal = document.getElementById('audioAddModal');
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.setAttribute('aria-hidden', 'true');
+    }
+    document.body.classList.remove('no-scroll');
+    
+    // 重置表單
+    const addChooseBtn = document.getElementById('addChooseBtn');
+    const addAudioInput = document.getElementById('addAudioInput');
+    const addEmotion = document.getElementById('addEmotion');
+    const addSource = document.getElementById('addSource');
+    
+    if (addChooseBtn) addChooseBtn.innerHTML = '＋ 選擇檔案';
+    if (addAudioInput) addAudioInput.value = '';
+    if (addEmotion) addEmotion.value = '';
+    if (addSource) addSource.value = '';
 }
 
 function saveAudioFile() {

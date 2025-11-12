@@ -50,8 +50,6 @@
                         <select class="select">
                             <option value="newest">依上傳時間(新→舊)</option>
                             <option value="oldest">依上傳時間(舊→新)</option>
-                            <option value="name-asc">依檔名(A→Z)</option>
-                            <option value="name-desc">依檔名(Z→A)</option>
                         </select>
                         <button class="btn btn-primary btn-sm">套用</button>
                     </div>
@@ -225,31 +223,6 @@
                 </div>
             </section>
 
-            <!-- 音檔管理:編輯彈窗 -->
-            <div id="audioMetaModal" class="audio-modal hidden" aria-hidden="true">
-                <div class="audio-modal__card" role="dialog" aria-modal="true" aria-labelledby="audioMetaTitle">
-                    <div class="audio-modal__head">
-                        <h3 id="audioMetaTitle">音檔設定</h3>
-                        <button id="modalBtnClose" class="btn-ghost" aria-label="關閉">✕</button>
-                    </div>
-
-                    <div class="form-row">
-                        <label for="modalEmotion">情緒:</label>
-                        <input id="modalEmotion" type="text" placeholder="音檔適用什麼情緒…">
-                    </div>
-
-                    <div class="form-row">
-                        <label for="modalSource">來源:</label>
-                        <input id="modalSource" type="text" placeholder="音檔提取自…">
-                    </div>
-
-                    <div class="audio-modal__actions">
-                        <button id="modalBtnDelete" class="btn-ghost">刪除</button>
-                        <button id="modalBtnUpdate" class="btn-dark">更新</button>
-                    </div>
-                </div>
-            </div>
-
             <!-- 音檔管理:新增彈窗 -->
             <div id="audioAddModal" class="audio-modal hidden" aria-hidden="true">
                 <div class="audio-modal__card" role="dialog" aria-modal="true" aria-labelledby="audioAddTitle">
@@ -262,17 +235,18 @@
                         <label>檔案:</label>
                         <div>
                             <button id="addChooseBtn" type="button" class="file-choose">＋ 選擇檔案</button>
-                            <input id="addAudioInput" type="file" accept="audio/mpeg,audio/wav,.mp3,.wav" class="hidden">
+                            <input id="addAudioInput" type="file" accept="audio/*,video/mp4,video/quicktime,.mp3,.wav,.mp4,.mov,.m4a,.aac,.flac,.ogg" class="hidden">
                         </div>
                     </div>
 
                     <div class="form-row">
                         <label for="addEmotion">情緒:</label>
-                        <input id="addEmotion" type="text" placeholder="音檔適用什麼情緒…">
+                        <input id="addEmotion" type="text" placeholder="例如:audio">
                     </div>
+                    
                     <div class="form-row">
                         <label for="addSource">來源:</label>
-                        <input id="addSource" type="text" placeholder="音檔提取自…">
+                        <input id="addSource" type="text" placeholder="音檔提取自...">
                     </div>
 
                     <div class="audio-modal__actions">
@@ -303,7 +277,7 @@
                         <h3>🖊 語音樣本</h3>
                         <div class="media-preview audio-single">
                             <button type="button" class="add-audio" onclick="document.getElementById('audioUpload').click()">＋ 新增音檔</button>
-                            <input id="audioUpload" type="file" accept="audio/mpeg,audio/wav,.mp3,.wav" class="hidden">
+                            <input id="audioUpload" type="file" accept="audio/*,video/mp4,video/quicktime,.mp3,.wav,.mp4,.mov,.m4a,.aac,.flac,.ogg" class="hidden">
                         </div>
                     </div>
 
@@ -345,19 +319,15 @@
                             <div class="url-info">
                                 <span class="url-icon">🌐</span>
                                 <div class="url-details">
-                                    <h4>市府官網 - 市長專區</h4>
-                                    <a href="#" class="url-link">https://www.city.gov.tw/mayor</a>
+                                    <h4>桃園市政宣傳網</h4>
+                                    <a href="https://www.tyco.gov.tw/cp.aspx?n=14862" class="url-link" target="_blank" rel="noopener">https://www.tyco.gov.tw/cp.aspx?n=14862</a>
                                 </div>
                             </div>
                             <div class="url-stats">
-                                <div class="stat-item"><span class="stat-label">今日</span><span class="stat-value">2,345</span></div>
-                                <div class="stat-item"><span class="stat-label">本週</span><span class="stat-value">15,678</span></div>
-                                <div class="stat-item"><span class="stat-label">總計</span><span class="stat-value">45,890</span></div>
+                                <span class="stat-label">瀏覽人數: 1122</span>
                             </div>
                             <div class="url-actions">
-                                <button class="btn-icon" title="查看詳情">📊</button>
-                                <button class="btn-icon" title="編輯">✏️</button>
-                                <button class="btn-icon danger" title="刪除">🗑️</button>
+                                <button class="btn-icon danger" title="刪除">刪除</button>
                             </div>
                         </div>
                     </div>
