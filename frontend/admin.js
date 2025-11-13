@@ -74,57 +74,133 @@ function initDocumentManagement() {
  * 從後端載入文檔列表
  */
 async function loadDocumentsList() {
+    console.log('📂 開始載入文檔列表...');
+
+    const documentsList = document.querySelector('.documents-list');
+    let emptyState = documentsList.querySelector('.empty-state');
+
+    // 如果沒有空狀態元素，創建一個
+    if (!emptyState) {
+        emptyState = document.createElement('div');
+        emptyState.className = 'empty-state';
+        documentsList.appendChild(emptyState);
+    }
+
+    // 顯示加載中
+    emptyState.innerHTML = `
+        <div class="empty-illustration">⏳</div>
+        <p>正在載入文檔列表...</p>
+    `;
+    emptyState.classList.remove('hidden');
+
     try {
+        console.log('📡 調用 listDocuments API...');
         const result = await listDocuments();
+        console.log('📡 API 返回結果:', result);
 
-        const documentsList = document.querySelector('.documents-list');
-        const emptyState = documentsList.querySelector('.empty-state');
+        if (!result.success) {
+            throw new Error(result.error || '未知錯誤');
+        }
 
-        if (result.success && result.documents.length > 0) {
+        // 清除舊的文檔項目（保留 header）
+        const oldItems = documentsList.querySelectorAll('.document-item:not(.list-header)');
+        oldItems.forEach(item => item.remove());
+
+        if (result.documents && result.documents.length > 0) {
             // 移除空狀態
-            if (emptyState) {
-                emptyState.remove();
-            }
+            emptyState.classList.add('hidden');
 
             // 獲取 list-header
             const header = documentsList.querySelector('.list-header');
 
-            // 清除舊的文檔項目（保留 header）
-            const oldItems = documentsList.querySelectorAll('.document-item:not(.list-header)');
-            oldItems.forEach(item => item.remove());
+            // 按路徑分組（顯示文件夾結構）
+            const grouped = groupDocumentsByFolder(result.documents);
 
             // 添加文檔
-            result.documents.forEach(doc => {
-                const item = createDocumentItemFromAPI(doc);
-                if (header && header.nextSibling) {
-                    documentsList.insertBefore(item, header.nextSibling);
-                } else {
-                    documentsList.appendChild(item);
+            Object.keys(grouped).sort().forEach(folder => {
+                const docs = grouped[folder];
+
+                // 如果是子文件夾，添加文件夾標題
+                if (folder && folder !== '.') {
+                    const folderItem = createFolderHeader(folder);
+                    documentsList.appendChild(folderItem);
                 }
+
+                // 添加該文件夾下的文件
+                docs.forEach(doc => {
+                    const item = createDocumentItemFromAPI(doc);
+                    documentsList.appendChild(item);
+                });
             });
 
             console.log(`✅ 已載入 ${result.documents.length} 個文檔`);
+            showNotification(`✅ 已載入 ${result.documents.length} 個文檔`, 'success');
         } else {
             // 顯示空狀態
-            if (emptyState) {
-                emptyState.innerHTML = `
-                    <div class="empty-illustration">📂</div>
-                    <p>尚未有任何上傳的文檔</p>
-                    <small>從左側「上傳文檔」選取檔案</small>
-                `;
-            }
+            emptyState.classList.remove('hidden');
+            emptyState.innerHTML = `
+                <div class="empty-illustration">📂</div>
+                <p>尚未有任何上傳的文檔</p>
+                <small>從左側「上傳文檔」選取檔案</small>
+            `;
+            console.log('📂 知識庫中沒有文檔');
         }
     } catch (error) {
-        console.error('載入文檔列表失敗:', error);
-        const emptyState = document.querySelector('.empty-state');
-        if (emptyState) {
-            emptyState.innerHTML = `
-                <div class="empty-illustration">❌</div>
-                <p>載入文檔列表失敗</p>
-                <small>${error.message}</small>
-            `;
-        }
+        console.error('❌ 載入文檔列表失敗:', error);
+        emptyState.classList.remove('hidden');
+        emptyState.innerHTML = `
+            <div class="empty-illustration">❌</div>
+            <p>載入文檔列表失敗</p>
+            <small>${error.message}</small>
+            <br><br>
+            <button class="btn btn-primary btn-sm" onclick="loadDocumentsList()" style="margin-top: 10px;">重試</button>
+        `;
+        showNotification(`❌ 載入失敗: ${error.message}`, 'error');
     }
+}
+
+/**
+ * 按文件夾分組文檔
+ */
+function groupDocumentsByFolder(documents) {
+    const grouped = {};
+
+    documents.forEach(doc => {
+        // 獲取文件夾路徑
+        const pathParts = doc.path.split('/');
+        const folder = pathParts.length > 1 ? pathParts.slice(0, -1).join('/') : '.';
+
+        if (!grouped[folder]) {
+            grouped[folder] = [];
+        }
+        grouped[folder].push(doc);
+    });
+
+    return grouped;
+}
+
+/**
+ * 創建文件夾標題
+ */
+function createFolderHeader(folderPath) {
+    const item = document.createElement('div');
+    item.className = 'folder-header';
+    item.style.cssText = `
+        padding: 0.75rem 1rem;
+        background: #f3f4f6;
+        border-left: 3px solid #3b82f6;
+        margin: 0.5rem 0;
+        font-weight: 600;
+        color: #1f2937;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    `;
+    item.innerHTML = `
+        <span style="font-size: 1.2em;">📁</span>
+        <span>${folderPath}</span>
+    `;
+    return item;
 }
 
 /**
@@ -134,6 +210,7 @@ function createDocumentItemFromAPI(doc) {
     const item = document.createElement('div');
     item.className = 'document-item document-item--3';
     item.dataset.filePath = doc.path;
+    item.dataset.filename = doc.filename;
 
     // 格式化時間
     const uploadDate = new Date(doc.uploaded_at);
@@ -142,14 +219,45 @@ function createDocumentItemFromAPI(doc) {
     // 格式化文件大小
     const sizeStr = formatFileSize(doc.size);
 
+    // 獲取文件圖標
+    const fileIcon = getFileIcon(doc.extension);
+
     item.innerHTML = `
-        <span class="file-name" title="${doc.path}">${doc.filename}</span>
-        <span title="${sizeStr}">${timeString}</span>
+        <span class="file-name" title="${doc.path}">
+            ${fileIcon} ${doc.filename}
+            <small style="color: #6b7280; font-size: 0.75rem; margin-left: 0.5rem;">${sizeStr}</small>
+        </span>
+        <span title="${doc.uploaded_at}">${timeString}</span>
         <div class="actions">
-            <button class="btn-small danger" onclick="deleteDocumentFromBackend(this)">刪除</button>
+            <button class="btn-small" onclick="downloadDocumentFile(this)" title="下載">📥 下載</button>
+            <button class="btn-small danger" onclick="deleteDocumentFromBackend(this)" title="刪除">🗑️ 刪除</button>
         </div>
     `;
     return item;
+}
+
+/**
+ * 獲取文件圖標
+ */
+function getFileIcon(extension) {
+    const iconMap = {
+        '.pdf': '📕',
+        '.doc': '📘',
+        '.docx': '📘',
+        '.txt': '📄',
+        '.xls': '📊',
+        '.xlsx': '📊',
+        '.ppt': '📙',
+        '.pptx': '📙',
+        '.jpg': '🖼️',
+        '.jpeg': '🖼️',
+        '.png': '🖼️',
+        '.gif': '🖼️',
+        '.zip': '📦',
+        '.rar': '📦',
+        '.md': '📝'
+    };
+    return iconMap[extension] || '📄';
 }
 
 /**
@@ -313,6 +421,43 @@ function viewFile(btn) {
 }
 
 /**
+ * 下載文檔文件
+ */
+async function downloadDocumentFile(btn) {
+    const item = btn.closest('.document-item');
+    if (!item) return;
+
+    const filePath = item.dataset.filePath;
+    const fileName = item.dataset.filename || '文件';
+
+    if (!filePath) {
+        showNotification('無法獲取文件路徑', 'error');
+        return;
+    }
+
+    try {
+        showNotification(`正在準備下載 ${fileName}...`, 'info');
+
+        // 構建下載 URL
+        const downloadUrl = `/api/documents/${encodeURIComponent(filePath)}/download`;
+
+        // 創建隱藏的 a 標籤進行下載
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = fileName;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        showNotification(`✅ 開始下載 ${fileName}`, 'success');
+    } catch (error) {
+        console.error('下載錯誤:', error);
+        showNotification(`❌ 下載失敗: ${error.message}`, 'error');
+    }
+}
+
+/**
  * 從後端刪除文檔
  */
 async function deleteDocumentFromBackend(btn) {
@@ -320,7 +465,7 @@ async function deleteDocumentFromBackend(btn) {
     if (!item) return;
 
     const filePath = item.dataset.filePath;
-    const fileName = item.querySelector('.file-name')?.textContent || '文件';
+    const fileName = item.dataset.filename || '文件';
 
     if (!filePath) {
         showNotification('無法獲取文件路徑', 'error');
