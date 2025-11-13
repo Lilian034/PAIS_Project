@@ -244,9 +244,48 @@ Final Answer: 市民您好！桃園的交通建設是市府團隊非常重視的
 Question: {input}
 Thought: {agent_scratchpad}"""
 
+# 幕僚專用 Agent Prompt（不自稱善寶）
+STAFF_AGENT_PROMPT = """你是市府幕僚的 AI 助理，專門協助文稿校對、資料核實和內容建議。你的任務是根據提供的工具和對話記錄，提供專業、準確的協助。
+
+**你的回答風格：**
+1.  **語氣：** 專業、客觀、準確，針對幕僚工作需求。
+2.  **自稱：** 使用「我」，不要自稱善寶或其他名字。
+3.  **內容：** 優先使用工具從知識庫查找**準確**資訊進行事實核實。如果找不到，**誠實告知**。
+4.  **簡潔明確：** 回答要清晰、有條理，方便幕僚快速理解。
+5.  **校對重點：** 注意語法、用詞、專有名詞、事實正確性。
+
+**可用工具：**
+{tools}
+**工具名稱列表 (你不需要在回答中使用這個列表):**
+{tool_names}
+
+**你【必須嚴格】遵守以下的思考與回應格式 (ReAct 格式)：**
+Question: 使用者提出的問題。
+Thought: [你的思考過程，說明你打算做什麼]。
+Action: [你選擇的工具名稱，例如：搜尋知識庫]。 **【只有在你需要使用工具時才寫這行和下一行】**
+Action Input: [提供給工具的輸入]。
+Observation: [工具返回的結果。這會由系統自動填入]。
+Thought: [檢視 Observation 後的思考，判斷是否需要再次使用工具，或可以直接回答]。
+... (可以重複 Action/Action Input/Observation/Thought 流程) ...
+Thought: 我現在已經有足夠的資訊，可以給出最終的答案了。 **【在給出最終答案前，必須有這句 Thought】**
+Final Answer: [**這裡【直接】寫出**你最終要給使用者的【完整回覆內容】，**【只需要】**包含最終答案本身，**【絕對不要】**包含任何前面的 Thought, Action, Action Input, Observation 文字。]
+
+**對話記錄 (最近的對話)：**
+{chat_history}
+
+**開始！**
+
+Question: {input}
+Thought: {agent_scratchpad}"""
+
 
 agent_prompt = PromptTemplate(
     template=AGENT_PROMPT,
+    input_variables=["input", "chat_history", "agent_scratchpad", "tools", "tool_names"]
+)
+
+staff_agent_prompt = PromptTemplate(
+    template=STAFF_AGENT_PROMPT,
     input_variables=["input", "chat_history", "agent_scratchpad", "tools", "tool_names"]
 )
 
@@ -273,6 +312,7 @@ class ChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = "default"
     use_agent: bool = True
+    role: str = "public"  # "public" 或 "staff"，決定 AI 的身份
 
 class ChatResponse(BaseModel):
     reply: str
@@ -489,8 +529,14 @@ async def health_check():
 async def chat(request: ChatRequest):
     """
     對話 API (LangChain Agent + Memory 或 RAG Chain)
+    支援不同角色：public (善寶) 或 staff (幕僚助理)
     """
-    reply: str = "哎呀，善寶好像有點累了，或是網路不太穩定，請稍後再試一次喔！"
+    # 根據角色設置不同的預設錯誤訊息
+    if request.role == "staff":
+        reply: str = "抱歉，系統暫時無法回應，請稍後再試。"
+    else:
+        reply: str = "哎呀，善寶好像有點累了，或是網路不太穩定，請稍後再試一次喔！"
+
     sources: List[str] = []
     thought_process_str: Optional[str] = None
     result: Optional[Dict[str, Any]] = None
@@ -498,7 +544,7 @@ async def chat(request: ChatRequest):
     raw_agent_output: Optional[str] = None # 用於儲存 Agent 原始輸出
 
     try:
-        logger.info(f"💬 [{session_id}] 收到問題: {request.message}")
+        logger.info(f"💬 [{session_id}] 收到問題 (角色: {request.role}): {request.message}")
 
         if not agent and request.use_agent:
              logger.error(f"❌ Agent 未成功初始化，無法處理 Agent 請求 ({session_id})")
@@ -508,8 +554,21 @@ async def chat(request: ChatRequest):
 
         if request.use_agent:
             memory.output_key = "output"
+
+            # 根據角色選擇不同的 prompt 創建 agent
+            if request.role == "staff":
+                current_agent = create_react_agent(
+                    llm=llm,
+                    tools=tools,
+                    prompt=staff_agent_prompt
+                )
+                logger.info(f"🎭 使用幕僚助理模式")
+            else:
+                current_agent = agent  # 使用預設的公眾版 agent
+                logger.info(f"🎭 使用善寶模式")
+
             agent_executor = AgentExecutor(
-                agent=agent,
+                agent=current_agent,
                 tools=tools,
                 memory=memory,
                 verbose=True,

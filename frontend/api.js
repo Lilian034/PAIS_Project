@@ -87,7 +87,8 @@ async function proofreadContent(text, sessionId = null, isFirstMessage = false) 
 
         const requestBody = {
             message: message,
-            session_id: sessionId
+            session_id: sessionId,
+            role: "staff"  // 幕僚模式，不會自稱善寶
         };
         console.log('📤 發送到後端:', requestBody);
 
