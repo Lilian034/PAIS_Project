@@ -103,8 +103,8 @@ async function loadDocumentsList() {
             throw new Error(result.error || '未知錯誤');
         }
 
-        // 清除舊的文檔項目（保留 header）
-        const oldItems = documentsList.querySelectorAll('.document-item:not(.list-header)');
+        // 清除舊的文檔項目和資料夾標題（保留 list-header）
+        const oldItems = documentsList.querySelectorAll('.document-item:not(.list-header), .folder-header');
         oldItems.forEach(item => item.remove());
 
         if (result.documents && result.documents.length > 0) {
@@ -411,11 +411,16 @@ async function handleDocumentUpload(files) {
         }
     }
 
-    // 上傳完成後重新載入文檔列表
-    if (successCount > 0) {
-        showNotification(`✅ 上傳完成！成功 ${successCount} 個，共 ${uploadCount} 個`, 'success');
+    // 上傳完成後重新載入文檔列表（無論成功或失敗都刷新，因為文件可能已保存）
+    if (uploadCount > 0) {
+        if (successCount > 0) {
+            showNotification(`✅ 上傳完成！成功 ${successCount} 個，共 ${uploadCount} 個`, 'success');
+        } else {
+            showNotification(`⚠️ 上傳完成，但所有文件都無法加入知識庫`, 'warning');
+        }
+
+        // 重新載入文檔列表和資料夾列表
         await loadDocumentsList();
-        // 重新載入資料夾列表
         await loadFoldersList();
     }
 }
@@ -494,8 +499,9 @@ async function deleteDocumentFromBackend(btn) {
 
         if (result.success) {
             showNotification(`✅ ${fileName} 已刪除`, 'success');
-            // 重新載入文檔列表
+            // 重新載入文檔列表和資料夾列表
             await loadDocumentsList();
+            await loadFoldersList();
         } else {
             showNotification(`❌ 刪除失敗: ${result.error}`, 'error');
         }

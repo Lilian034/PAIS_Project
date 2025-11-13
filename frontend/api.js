@@ -344,6 +344,18 @@ async function uploadFile(file, folder = '') {
         }
 
         const data = await response.json();
+
+        // 檢查是否有錯誤字段（部分失敗的情況）
+        if (data.error) {
+            return {
+                success: false,
+                message: data.message,
+                error: data.error,
+                filename: data.filename,
+                chunks: data.chunks || 0
+            };
+        }
+
         return {
             success: true,
             message: data.message,
