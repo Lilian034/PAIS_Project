@@ -97,7 +97,7 @@ async function proofreadContent(text, sessionId = null, isFirstMessage = false) 
         const data = await response.json();
         return {
             success: true,
-            response: data.response,
+            response: data.reply,  // 後端返回的是 'reply' 而非 'response'
             session_id: data.session_id,
             sources: data.sources
         };
