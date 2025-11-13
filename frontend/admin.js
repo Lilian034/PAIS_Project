@@ -13,24 +13,13 @@ document.addEventListener('DOMContentLoaded', () => {
     checkAPIConnection();
 });
 
-// ==================== API 連接測試 ====================
 async function checkAPIConnection() {
     try {
-        // 測試公眾API
-        const publicHealth = await healthCheck();
-        console.log('公眾API健康狀態:', publicHealth);
-
-        // 測試幕僚API
-        const staffHealth = await staffHealthCheck();
-        console.log('幕僚API健康狀態:', staffHealth);
-
-        if (publicHealth && publicHealth.status === 'healthy' && staffHealth && staffHealth.status === 'healthy') {
-            console.log('✅ 所有API服務運行正常');
-        } else {
-            console.warn('⚠️ 部分API服務可能未啟動');
-        }
+        const [publicHealth, staffHealth] = await Promise.all([healthCheck(), staffHealthCheck()]);
+        const allHealthy = publicHealth?.status === 'healthy' && staffHealth?.status === 'healthy';
+        if (!allHealthy) console.warn('部分API服務可能未啟動');
     } catch (error) {
-        console.error('❌ API連接測試失敗:', error);
+        console.error('API連接測試失敗:', error);
     }
 }
 
@@ -75,85 +64,51 @@ function initDocumentManagement() {
     loadFoldersList();
 }
 
-/**
- * 從後端載入文檔列表
- */
 async function loadDocumentsList() {
-    console.log('📂 開始載入文檔列表...');
-
     const documentsList = document.querySelector('.documents-list');
     let emptyState = documentsList.querySelector('.empty-state');
 
-    // 如果沒有空狀態元素，創建一個
     if (!emptyState) {
         emptyState = document.createElement('div');
         emptyState.className = 'empty-state';
         documentsList.appendChild(emptyState);
     }
 
-    // 顯示加載中
-    emptyState.innerHTML = `
-        <div class="empty-illustration">⏳</div>
-        <p>正在載入文檔列表...</p>
-    `;
+    emptyState.innerHTML = '<div class="empty-illustration">⏳</div><p>正在載入文檔列表...</p>';
     emptyState.classList.remove('hidden');
 
     try {
-        console.log('📡 調用 listDocuments API...');
         const result = await listDocuments();
-        console.log('📡 API 返回結果:', result);
+        if (!result.success) throw new Error(result.error || '未知錯誤');
 
-        if (!result.success) {
-            throw new Error(result.error || '未知錯誤');
-        }
-
-        // 清除舊的文檔項目和資料夾標題（保留 list-header）
         const oldItems = documentsList.querySelectorAll('.document-item:not(.list-header), .folder-header');
         oldItems.forEach(item => item.remove());
 
         if (result.documents && result.documents.length > 0) {
-            // 移除空狀態
             emptyState.classList.add('hidden');
-
-            // 獲取 list-header
-            const header = documentsList.querySelector('.list-header');
-
-            // 按路徑分組（顯示文件夾結構）
             const grouped = groupDocumentsByFolder(result.documents);
 
-            // 添加文檔
             Object.keys(grouped).sort().forEach(folder => {
-                let docs = grouped[folder];
+                let docs = sortDocumentsByMode(grouped[folder], documentSortMode);
 
-                // 應用排序
-                docs = sortDocumentsByMode(docs, documentSortMode);
-
-                // 如果是子文件夾，添加文件夾標題
                 if (folder && folder !== '.') {
-                    const folderItem = createFolderHeader(folder);
-                    documentsList.appendChild(folderItem);
+                    documentsList.appendChild(createFolderHeader(folder));
                 }
 
-                // 添加該文件夾下的文件
                 docs.forEach(doc => {
-                    const item = createDocumentItemFromAPI(doc);
-                    documentsList.appendChild(item);
+                    documentsList.appendChild(createDocumentItemFromAPI(doc));
                 });
             });
-
-            console.log(`✅ 已載入 ${result.documents.length} 個文檔`);
         } else {
-            // 顯示空狀態
             emptyState.classList.remove('hidden');
             emptyState.innerHTML = `
                 <div class="empty-illustration">📂</div>
                 <p>尚未有任何上傳的文檔</p>
                 <small>從左側「上傳文檔」選取檔案</small>
             `;
-            console.log('📂 知識庫中沒有文檔');
         }
     } catch (error) {
-        console.error('❌ 載入文檔列表失敗:', error);
+        console.error('載入文檔列表失敗:', error);
         emptyState.classList.remove('hidden');
         emptyState.innerHTML = `
             <div class="empty-illustration">❌</div>
@@ -162,7 +117,7 @@ async function loadDocumentsList() {
             <br><br>
             <button class="btn btn-primary btn-sm" onclick="loadDocumentsList()" style="margin-top: 10px;">重試</button>
         `;
-        showNotification(`❌ 載入失敗: ${error.message}`, 'error');
+        showNotification(`載入失敗: ${error.message}`, 'error');
     }
 }
 
@@ -345,51 +300,7 @@ function sortDocumentsByMode(docs, mode) {
 function getFileName(item) {
     const el = item.querySelector('.file-name');
     if (!el) return '';
-    let txt = el.textContent || '';
-    return txt.replace(/\s+/g, ' ').trim().toLowerCase();
-}
-
-function getTimeMs(item) {
-    if (item.dataset.ts) return parseInt(item.dataset.ts, 10) || 0;
-    
-    const spans = item.querySelectorAll('span');
-    const timeStr = spans[1]?.textContent?.trim() || '';
-    const ms = parseTimeToMs(timeStr);
-    if (ms) item.dataset.ts = String(ms);
-    return ms;
-}
-
-function parseTimeToMs(s) {
-    if (!s) return 0;
-    s = s.trim().replace(/\s+/g, ' ').replace(/-/g, '/');
-    
-    const m = s.match(/(\d{4})\/(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{2})/);
-    if (m) {
-        const [, y, mo, d, h, mi] = m;
-        return new Date(+y, +mo - 1, +d, +h, +mi).getTime();
-    }
-    
-    const t = Date.parse(s);
-    return isNaN(t) ? 0 : t;
-}
-
-function createDocumentItem(file) {
-    const item = document.createElement('div');
-    item.className = 'document-item document-item--3';
-    
-    const now = new Date();
-    const timeString = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
-    const fileUrl = URL.createObjectURL(file);
-    
-    item.innerHTML = `
-        <span class="file-name">${file.name}</span>
-        <span>${timeString}</span>
-        <div class="actions">
-            <button class="btn-small danger" onclick="deleteDocument(this)">刪除</button>
-            <button class="btn-small" data-url="${fileUrl}" onclick="viewFile(this)">查看檔案</button>
-        </div>
-    `;
-    return item;
+    return (el.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
 async function handleDocumentUpload(files) {
