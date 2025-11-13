@@ -37,6 +37,9 @@ from langchain.chains import (
 from dotenv import load_dotenv
 from loguru import logger
 
+# 載入數據庫輔助類
+from utils.db_helper import StaffDatabase
+
 # 載入環境變數
 load_dotenv()
 
@@ -104,6 +107,9 @@ vectorstore = Qdrant(
     collection_name=COLLECTION_NAME,
     embeddings=embeddings
 )
+
+# ==================== 訪客計數器數據庫 ====================
+db = StaffDatabase()
 
 # ==================== LangChain Memory 管理 ====================
 memory_store: Dict[str, ConversationBufferMemory] = {}
@@ -289,6 +295,11 @@ class ContentGenerationRequest(BaseModel):
 
 class IngestRequest(BaseModel):
     folder_path: str = "documents"
+
+class VisitorStatsResponse(BaseModel):
+    month: str
+    count: int
+    last_reset: str
 
 # ==================== 工具函數 ====================
 # (保持不變)
@@ -1095,6 +1106,49 @@ async def get_stats():
     except Exception as e:
         logger.error(f"❌ 取得系統統計時發生錯誤: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"無法取得系統統計: {str(e)}")
+
+
+# ==================== 訪客計數器 API ====================
+
+@app.post("/api/visitor/increment", response_model=VisitorStatsResponse)
+async def increment_visitor():
+    """增加訪客計數"""
+    try:
+        stats = db.increment_visitor_count()
+        return VisitorStatsResponse(
+            month=stats['month'],
+            count=stats['count'],
+            last_reset=stats['last_reset']
+        )
+    except Exception as e:
+        logger.error(f"❌ 增加訪客計數時發生錯誤: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"無法增加訪客計數: {str(e)}")
+
+
+@app.get("/api/visitor/stats", response_model=VisitorStatsResponse)
+async def get_visitor_stats(month: Optional[str] = None):
+    """取得訪客統計"""
+    try:
+        stats = db.get_visitor_stats(month)
+        if stats:
+            return VisitorStatsResponse(
+                month=stats['month'],
+                count=stats['count'],
+                last_reset=stats['last_reset']
+            )
+        else:
+            # 如果沒有數據，返回當月初始值
+            from datetime import datetime
+            current_month = month or datetime.now().strftime("%Y-%m")
+            return VisitorStatsResponse(
+                month=current_month,
+                count=0,
+                last_reset=datetime.now().isoformat()
+            )
+    except Exception as e:
+        logger.error(f"❌ 取得訪客統計時發生錯誤: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"無法取得訪客統計: {str(e)}")
+
 
 # --- 啟動與關閉事件保持不變 ---
 @app.on_event("startup")
