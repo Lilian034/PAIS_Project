@@ -53,6 +53,10 @@ function initTabSwitching() {
 }
 
 // ==================== 政務文檔管理 ====================
+
+// 全局排序模式
+let documentSortMode = 'newest'; // 'newest', 'oldest'
+
 function initDocumentManagement() {
     const uploadInput = document.getElementById('documentUpload');
     if (uploadInput) {
@@ -119,7 +123,10 @@ async function loadDocumentsList() {
 
             // 添加文檔
             Object.keys(grouped).sort().forEach(folder => {
-                const docs = grouped[folder];
+                let docs = grouped[folder];
+
+                // 應用排序
+                docs = sortDocumentsByMode(docs, documentSortMode);
 
                 // 如果是子文件夾，添加文件夾標題
                 if (folder && folder !== '.') {
@@ -135,7 +142,6 @@ async function loadDocumentsList() {
             });
 
             console.log(`✅ 已載入 ${result.documents.length} 個文檔`);
-            showNotification(`✅ 已載入 ${result.documents.length} 個文檔`, 'success');
         } else {
             // 顯示空狀態
             emptyState.classList.remove('hidden');
@@ -292,43 +298,48 @@ function initDocumentSearch() {
 function initDocumentSort() {
     const section = document.querySelector('#documents');
     if (!section) return;
-    
-    const listEl = section.querySelector('.documents-list');
+
     const applyBtn = section.querySelector('.docs-actions .btn');
     const selectEl = section.querySelector('.docs-actions .select');
-    if (!listEl || !applyBtn || !selectEl) return;
-    
-    applyBtn.addEventListener('click', () => {
+    if (!applyBtn || !selectEl) return;
+
+    applyBtn.addEventListener('click', async () => {
         const mode = selectEl.value || 'newest';
-        
-        // 只選擇 document-item 但排除 list-header
-        const items = Array.from(listEl.querySelectorAll('.document-item:not(.list-header)'));
-        
-        if (items.length === 0) {
-            showNotification('沒有可排序的項目', 'warning');
-            return;
-        }
-        
-        const keyed = items.map(el => ({
-            el,
-            ts: getTimeMs(el)
-        }));
-        
-        switch (mode) {
-            case 'oldest':
-                keyed.sort((a, b) => (a.ts || 0) - (b.ts || 0));
-                break;
-            case 'newest':
-            default:
-                keyed.sort((a, b) => (b.ts || 0) - (a.ts || 0));
-                break;
-        }
-        
-        // 重新排列(表頭會自動保持在最前面)
-        keyed.forEach(k => listEl.appendChild(k.el));
-        
+        documentSortMode = mode;
+
+        // 重新載入文檔列表以應用排序
+        await loadDocumentsList();
         showNotification('已套用排序', 'success');
     });
+}
+
+/**
+ * 根據排序模式排序文檔
+ */
+function sortDocumentsByMode(docs, mode) {
+    if (!docs || docs.length === 0) return docs;
+
+    const sorted = [...docs];
+
+    switch (mode) {
+        case 'oldest':
+            sorted.sort((a, b) => {
+                const timeA = new Date(a.uploaded_at).getTime();
+                const timeB = new Date(b.uploaded_at).getTime();
+                return timeA - timeB;
+            });
+            break;
+        case 'newest':
+        default:
+            sorted.sort((a, b) => {
+                const timeA = new Date(a.uploaded_at).getTime();
+                const timeB = new Date(b.uploaded_at).getTime();
+                return timeB - timeA;
+            });
+            break;
+    }
+
+    return sorted;
 }
 
 function getFileName(item) {
@@ -384,44 +395,51 @@ function createDocumentItem(file) {
 async function handleDocumentUpload(files) {
     let uploadCount = 0;
     let successCount = 0;
+    let failedFiles = [];
 
     // 獲取選擇的資料夾
     const folderSelect = document.getElementById('uploadFolder');
     const selectedFolder = folderSelect ? folderSelect.value : '';
 
-    const folderDisplay = selectedFolder ? `/${selectedFolder}` : ' (根目錄)';
+    const folderDisplay = selectedFolder ? `/${selectedFolder}` : '根目錄';
+
+    // 顯示開始上傳的通知
+    showNotification(`正在上傳 ${files.length} 個文件到 ${folderDisplay}...`, 'info');
 
     for (const file of Array.from(files)) {
         try {
             uploadCount++;
-            showNotification(`正在上傳 ${file.name} 到${folderDisplay}... (${uploadCount}/${files.length})`, 'info');
 
             // 調用 API 上傳文件，傳入資料夾參數
             const result = await uploadFile(file, selectedFolder);
 
             if (result.success) {
                 successCount++;
-                showNotification(`✅ ${file.name} 上傳成功！已加入知識庫 (${result.chunks || 0} 個分塊)`, 'success');
             } else {
-                showNotification(`❌ ${file.name} 上傳失敗: ${result.error}`, 'error');
+                failedFiles.push({ name: file.name, error: result.error });
             }
         } catch (error) {
             console.error('上傳錯誤:', error);
-            showNotification(`❌ ${file.name} 上傳失敗: ${error.message}`, 'error');
+            failedFiles.push({ name: file.name, error: error.message });
         }
     }
 
-    // 上傳完成後重新載入文檔列表（無論成功或失敗都刷新，因為文件可能已保存）
+    // 上傳完成後重新載入文檔列表和資料夾列表
     if (uploadCount > 0) {
-        if (successCount > 0) {
-            showNotification(`✅ 上傳完成！成功 ${successCount} 個，共 ${uploadCount} 個`, 'success');
-        } else {
-            showNotification(`⚠️ 上傳完成，但所有文件都無法加入知識庫`, 'warning');
-        }
-
-        // 重新載入文檔列表和資料夾列表
         await loadDocumentsList();
         await loadFoldersList();
+
+        // 顯示最終結果
+        if (successCount === uploadCount) {
+            showNotification(`✅ 上傳成功！已上傳 ${successCount} 個文件`, 'success');
+        } else if (successCount > 0) {
+            showNotification(`⚠️ 部分上傳成功：成功 ${successCount} 個，失敗 ${failedFiles.length} 個`, 'warning');
+            // 在 console 中顯示失敗詳情
+            console.error('上傳失敗的文件:', failedFiles);
+        } else {
+            showNotification(`❌ 上傳失敗：所有文件都無法上傳`, 'error');
+            console.error('上傳失敗的文件:', failedFiles);
+        }
     }
 }
 
