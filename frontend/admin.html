@@ -61,7 +61,22 @@
                             <div class="upload-icon">📁</div>
                             <h3>上傳文檔</h3>
                             <p>支援 PDF、Word 格式</p>
-                            <input type="file" id="documentUpload" accept=".pdf,.doc,.docx,.xls,.xlsx" multiple class="hidden">
+
+                            <div class="folder-selector" style="width: 100%; margin: 1rem 0;">
+                                <label for="uploadFolder" style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #374151;">
+                                    📂 選擇資料夾：
+                                </label>
+                                <div style="display: flex; gap: 0.5rem;">
+                                    <select id="uploadFolder" style="flex: 1; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.9rem;">
+                                        <option value="">根目錄 (documents/)</option>
+                                    </select>
+                                    <button class="btn-secondary" onclick="showNewFolderDialog()" title="新增資料夾" style="padding: 0.5rem 1rem; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                                        ➕ 新增
+                                    </button>
+                                </div>
+                            </div>
+
+                            <input type="file" id="documentUpload" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt" multiple class="hidden">
                             <button class="upload-btn" onclick="document.getElementById('documentUpload').click()">選擇文件</button>
                         </div>
                     </div>

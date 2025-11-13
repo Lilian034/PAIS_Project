@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import List, Optional, Dict, Any
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Header
+from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Header, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -780,12 +780,19 @@ async def ingest_documents(
 @app.post("/api/upload")
 async def upload_file(
     file: UploadFile = File(...),
+    folder: str = Form(""),
     admin: bool = Depends(verify_admin)
 ):
     """單個檔案上傳並直接加入知識庫"""
     try:
+        # 建立上傳目標資料夾
         upload_folder = Path("documents")
-        upload_folder.mkdir(exist_ok=True)
+        if folder and folder.strip():
+            # 清理資料夾路徑，防止路徑遍歷攻擊
+            clean_folder = folder.strip().replace("..", "").replace("\\", "/")
+            upload_folder = upload_folder / clean_folder
+
+        upload_folder.mkdir(parents=True, exist_ok=True)
         file_path = upload_folder / Path(file.filename).name
 
         if file_path.exists():

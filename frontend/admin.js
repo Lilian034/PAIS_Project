@@ -66,8 +66,9 @@ function initDocumentManagement() {
     initDocumentSearch();
     initDocumentSort();
 
-    // 載入文檔列表
+    // 載入文檔列表和資料夾列表
     loadDocumentsList();
+    loadFoldersList();
 }
 
 /**
@@ -384,13 +385,19 @@ async function handleDocumentUpload(files) {
     let uploadCount = 0;
     let successCount = 0;
 
+    // 獲取選擇的資料夾
+    const folderSelect = document.getElementById('uploadFolder');
+    const selectedFolder = folderSelect ? folderSelect.value : '';
+
+    const folderDisplay = selectedFolder ? `/${selectedFolder}` : ' (根目錄)';
+
     for (const file of Array.from(files)) {
         try {
             uploadCount++;
-            showNotification(`正在上傳 ${file.name}... (${uploadCount}/${files.length})`, 'info');
+            showNotification(`正在上傳 ${file.name} 到${folderDisplay}... (${uploadCount}/${files.length})`, 'info');
 
-            // 調用 API 上傳文件
-            const result = await uploadFile(file);
+            // 調用 API 上傳文件，傳入資料夾參數
+            const result = await uploadFile(file, selectedFolder);
 
             if (result.success) {
                 successCount++;
@@ -408,6 +415,8 @@ async function handleDocumentUpload(files) {
     if (successCount > 0) {
         showNotification(`✅ 上傳完成！成功 ${successCount} 個，共 ${uploadCount} 個`, 'success');
         await loadDocumentsList();
+        // 重新載入資料夾列表
+        await loadFoldersList();
     }
 }
 
@@ -1166,6 +1175,87 @@ function showNotification(message, type = 'info') {
             }
         }, 300);
     }, 3000);
+}
+
+// ==================== 資料夾管理功能 ====================
+
+/**
+ * 載入資料夾列表到下拉選單
+ */
+async function loadFoldersList() {
+    try {
+        console.log('📂 載入資料夾列表...');
+        const result = await listDocuments();
+
+        if (!result.success || !result.documents) {
+            console.error('無法載入資料夾列表');
+            return;
+        }
+
+        // 從文檔路徑中提取所有資料夾
+        const folders = new Set();
+        result.documents.forEach(doc => {
+            const pathParts = doc.path.split('/');
+            if (pathParts.length > 1) {
+                // 提取所有層級的資料夾路徑
+                for (let i = 1; i <= pathParts.length - 1; i++) {
+                    const folderPath = pathParts.slice(0, i).join('/');
+                    folders.add(folderPath);
+                }
+            }
+        });
+
+        // 將資料夾列表填入下拉選單
+        const folderSelect = document.getElementById('uploadFolder');
+        if (folderSelect) {
+            // 保留根目錄選項
+            folderSelect.innerHTML = '<option value="">根目錄 (documents/)</option>';
+
+            // 添加所有資料夾
+            const sortedFolders = Array.from(folders).sort();
+            sortedFolders.forEach(folder => {
+                const option = document.createElement('option');
+                option.value = folder;
+                option.textContent = `📁 ${folder}`;
+                folderSelect.appendChild(option);
+            });
+
+            console.log(`✅ 已載入 ${sortedFolders.length} 個資料夾`);
+        }
+    } catch (error) {
+        console.error('載入資料夾列表失敗:', error);
+    }
+}
+
+/**
+ * 顯示新增資料夾對話框
+ */
+function showNewFolderDialog() {
+    const folderName = prompt('請輸入新資料夾名稱：', '');
+
+    if (!folderName) {
+        return; // 使用者取消
+    }
+
+    // 清理資料夾名稱
+    const cleanFolderName = folderName.trim().replace(/[\/\\:*?"<>|]/g, '-');
+
+    if (!cleanFolderName) {
+        showNotification('❌ 資料夾名稱無效', 'error');
+        return;
+    }
+
+    // 將新資料夾添加到下拉選單
+    const folderSelect = document.getElementById('uploadFolder');
+    if (folderSelect) {
+        const option = document.createElement('option');
+        option.value = cleanFolderName;
+        option.textContent = `📁 ${cleanFolderName}`;
+        folderSelect.appendChild(option);
+        folderSelect.value = cleanFolderName; // 自動選擇新資料夾
+
+        showNotification(`✅ 已建立資料夾「${cleanFolderName}」，可以開始上傳文件`, 'success');
+    }
 }
 
 // 添加動畫樣式
