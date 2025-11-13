@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import List, Optional, Dict, Any
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Header
+from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Header, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -780,12 +780,19 @@ async def ingest_documents(
 @app.post("/api/upload")
 async def upload_file(
     file: UploadFile = File(...),
+    folder: str = Form(""),
     admin: bool = Depends(verify_admin)
 ):
     """單個檔案上傳並直接加入知識庫"""
     try:
+        # 建立上傳目標資料夾
         upload_folder = Path("documents")
-        upload_folder.mkdir(exist_ok=True)
+        if folder and folder.strip():
+            # 清理資料夾路徑，防止路徑遍歷攻擊
+            clean_folder = folder.strip().replace("..", "").replace("\\", "/")
+            upload_folder = upload_folder / clean_folder
+
+        upload_folder.mkdir(parents=True, exist_ok=True)
         file_path = upload_folder / Path(file.filename).name
 
         if file_path.exists():
@@ -816,7 +823,15 @@ async def upload_file(
             }
 
         for doc in docs:
-            relative_path = file_path.relative_to(Path.cwd())
+            # 確保 file_path 是絕對路徑，然後計算相對於工作目錄的路徑
+            abs_file_path = file_path.resolve()
+            abs_cwd = Path.cwd().resolve()
+            try:
+                relative_path = abs_file_path.relative_to(abs_cwd)
+            except ValueError:
+                # 如果無法計算相對路徑，直接使用檔案路徑
+                relative_path = file_path
+
             doc.metadata["source"] = str(relative_path).replace("\\", "/")
             doc.metadata["uploaded_at"] = datetime.now().isoformat()
             doc.metadata["filename"] = file_path.name

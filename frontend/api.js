@@ -316,11 +316,16 @@ async function generateVideo(taskId, imagePath, prompt = null) {
 
 /**
  * 上傳單個檔案到知識庫
+ * @param {File} file - 要上傳的文件
+ * @param {string} folder - 目標資料夾路徑（可選）
  */
-async function uploadFile(file) {
+async function uploadFile(file, folder = '') {
     try {
         const formData = new FormData();
         formData.append('file', file);
+        if (folder) {
+            formData.append('folder', folder);
+        }
 
         const response = await fetch(`${API_BASE_URL}/upload`, {
             method: 'POST',
@@ -339,6 +344,18 @@ async function uploadFile(file) {
         }
 
         const data = await response.json();
+
+        // 檢查是否有錯誤字段（部分失敗的情況）
+        if (data.error) {
+            return {
+                success: false,
+                message: data.message,
+                error: data.error,
+                filename: data.filename,
+                chunks: data.chunks || 0
+            };
+        }
+
         return {
             success: true,
             message: data.message,
