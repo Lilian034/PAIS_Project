@@ -8,7 +8,31 @@ document.addEventListener('DOMContentLoaded', () => {
     initVideoGeneration();
     initDataMonitoring();
     initLogout();
+
+    // 測試API連接
+    checkAPIConnection();
 });
+
+// ==================== API 連接測試 ====================
+async function checkAPIConnection() {
+    try {
+        // 測試公眾API
+        const publicHealth = await healthCheck();
+        console.log('公眾API健康狀態:', publicHealth);
+
+        // 測試幕僚API
+        const staffHealth = await staffHealthCheck();
+        console.log('幕僚API健康狀態:', staffHealth);
+
+        if (publicHealth && publicHealth.status === 'healthy' && staffHealth && staffHealth.status === 'healthy') {
+            console.log('✅ 所有API服務運行正常');
+        } else {
+            console.warn('⚠️ 部分API服務可能未啟動');
+        }
+    } catch (error) {
+        console.error('❌ API連接測試失敗:', error);
+    }
+}
 
 // ==================== 標籤切換 ====================
 function initTabSwitching() {
@@ -38,9 +62,105 @@ function initDocumentManagement() {
             }
         });
     }
-    
+
     initDocumentSearch();
-    initDocumentSort()
+    initDocumentSort();
+
+    // 載入文檔列表
+    loadDocumentsList();
+}
+
+/**
+ * 從後端載入文檔列表
+ */
+async function loadDocumentsList() {
+    try {
+        const result = await listDocuments();
+
+        const documentsList = document.querySelector('.documents-list');
+        const emptyState = documentsList.querySelector('.empty-state');
+
+        if (result.success && result.documents.length > 0) {
+            // 移除空狀態
+            if (emptyState) {
+                emptyState.remove();
+            }
+
+            // 獲取 list-header
+            const header = documentsList.querySelector('.list-header');
+
+            // 清除舊的文檔項目（保留 header）
+            const oldItems = documentsList.querySelectorAll('.document-item:not(.list-header)');
+            oldItems.forEach(item => item.remove());
+
+            // 添加文檔
+            result.documents.forEach(doc => {
+                const item = createDocumentItemFromAPI(doc);
+                if (header && header.nextSibling) {
+                    documentsList.insertBefore(item, header.nextSibling);
+                } else {
+                    documentsList.appendChild(item);
+                }
+            });
+
+            console.log(`✅ 已載入 ${result.documents.length} 個文檔`);
+        } else {
+            // 顯示空狀態
+            if (emptyState) {
+                emptyState.innerHTML = `
+                    <div class="empty-illustration">📂</div>
+                    <p>尚未有任何上傳的文檔</p>
+                    <small>從左側「上傳文檔」選取檔案</small>
+                `;
+            }
+        }
+    } catch (error) {
+        console.error('載入文檔列表失敗:', error);
+        const emptyState = document.querySelector('.empty-state');
+        if (emptyState) {
+            emptyState.innerHTML = `
+                <div class="empty-illustration">❌</div>
+                <p>載入文檔列表失敗</p>
+                <small>${error.message}</small>
+            `;
+        }
+    }
+}
+
+/**
+ * 從 API 資料創建文檔項目
+ */
+function createDocumentItemFromAPI(doc) {
+    const item = document.createElement('div');
+    item.className = 'document-item document-item--3';
+    item.dataset.filePath = doc.path;
+
+    // 格式化時間
+    const uploadDate = new Date(doc.uploaded_at);
+    const timeString = `${uploadDate.getFullYear()}-${pad(uploadDate.getMonth() + 1)}-${pad(uploadDate.getDate())} ${pad(uploadDate.getHours())}:${pad(uploadDate.getMinutes())}`;
+
+    // 格式化文件大小
+    const sizeStr = formatFileSize(doc.size);
+
+    item.innerHTML = `
+        <span class="file-name" title="${doc.path}">${doc.filename}</span>
+        <span title="${sizeStr}">${timeString}</span>
+        <div class="actions">
+            <button class="btn-small danger" onclick="deleteDocumentFromBackend(this)">刪除</button>
+        </div>
+    `;
+    return item;
+}
+
+/**
+ * 格式化文件大小
+ */
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
 }
 
 function initDocumentSearch() {
@@ -152,17 +272,35 @@ function createDocumentItem(file) {
     return item;
 }
 
-function handleDocumentUpload(files) {
-    Array.from(files).forEach(file => {
-        const fileItem = createDocumentItem(file);
-        const documentsList = document.querySelector('.documents-list');
-        documentsList.appendChild(fileItem);
-        
-        const empty = documentsList.querySelector('.empty-state');
-        if (empty) empty.classList.add('hidden');
-    });
-    
-    showNotification('文檔已加入清單！', 'success');
+async function handleDocumentUpload(files) {
+    let uploadCount = 0;
+    let successCount = 0;
+
+    for (const file of Array.from(files)) {
+        try {
+            uploadCount++;
+            showNotification(`正在上傳 ${file.name}... (${uploadCount}/${files.length})`, 'info');
+
+            // 調用 API 上傳文件
+            const result = await uploadFile(file);
+
+            if (result.success) {
+                successCount++;
+                showNotification(`✅ ${file.name} 上傳成功！已加入知識庫 (${result.chunks || 0} 個分塊)`, 'success');
+            } else {
+                showNotification(`❌ ${file.name} 上傳失敗: ${result.error}`, 'error');
+            }
+        } catch (error) {
+            console.error('上傳錯誤:', error);
+            showNotification(`❌ ${file.name} 上傳失敗: ${error.message}`, 'error');
+        }
+    }
+
+    // 上傳完成後重新載入文檔列表
+    if (successCount > 0) {
+        showNotification(`✅ 上傳完成！成功 ${successCount} 個，共 ${uploadCount} 個`, 'success');
+        await loadDocumentsList();
+    }
 }
 
 function viewFile(btn) {
@@ -174,16 +312,43 @@ function viewFile(btn) {
     }
 }
 
-function deleteDocument(btn) {
+/**
+ * 從後端刪除文檔
+ */
+async function deleteDocumentFromBackend(btn) {
     const item = btn.closest('.document-item');
-    if (item) item.remove();
-    
-    const list = document.querySelector('.documents-list');
-    const empty = list?.querySelector('.empty-state');
-    if (list && !list.querySelector('.document-item') && empty) {
-        empty.classList.remove('hidden');
+    if (!item) return;
+
+    const filePath = item.dataset.filePath;
+    const fileName = item.querySelector('.file-name')?.textContent || '文件';
+
+    if (!filePath) {
+        showNotification('無法獲取文件路徑', 'error');
+        return;
     }
-    showNotification('已刪除', 'success');
+
+    // 確認刪除
+    if (!confirm(`確定要刪除「${fileName}」嗎？此操作無法恢復。`)) {
+        return;
+    }
+
+    try {
+        showNotification(`正在刪除 ${fileName}...`, 'info');
+
+        // 調用 API 刪除文件
+        const result = await deleteDocument(filePath);
+
+        if (result.success) {
+            showNotification(`✅ ${fileName} 已刪除`, 'success');
+            // 重新載入文檔列表
+            await loadDocumentsList();
+        } else {
+            showNotification(`❌ 刪除失敗: ${result.error}`, 'error');
+        }
+    } catch (error) {
+        console.error('刪除錯誤:', error);
+        showNotification(`❌ 刪除失敗: ${error.message}`, 'error');
+    }
 }
 
 function pad(n) {
@@ -292,21 +457,23 @@ function handleAudioUpload(files) {
 }
 
 // ==================== 資料校稿 ====================
+let proofreadSessionId = null; // 保存會話ID
+
 function initProofreading() {
     const sendBtn = document.getElementById('pr-sendBtn');
     const messageInput = document.getElementById('pr-messageInput');
-    
+
     if (!sendBtn || !messageInput) return;
-    
-    sendBtn.addEventListener('click', () => {
+
+    sendBtn.addEventListener('click', async () => {
         const message = messageInput.value.trim();
         if (message) {
             addUserMessage(message);
             messageInput.value = '';
-            simulateAIResponse(message);
+            await sendProofreadRequest(message);
         }
     });
-    
+
     messageInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
@@ -327,21 +494,75 @@ function addUserMessage(text) {
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
-function simulateAIResponse(userMessage) {
-    setTimeout(() => {
-        const messagesContainer = document.getElementById('pr-chatMessages');
-        const messageDiv = document.createElement('div');
-        messageDiv.className = 'pr-message pr-ai';
-        messageDiv.innerHTML = `
+async function sendProofreadRequest(userMessage) {
+    const messagesContainer = document.getElementById('pr-chatMessages');
+
+    // 顯示加載訊息
+    const loadingDiv = document.createElement('div');
+    loadingDiv.className = 'pr-message pr-ai';
+    loadingDiv.innerHTML = `
+        <div class="pr-avatar pr-ai-avatar">
+            <img src="./proofreading.png" alt="校稿助理" onerror="this.style.display='none';this.closest('.pr-ai-avatar').classList.add('fallback');">
+            <span class="fallback-text">校</span>
+        </div>
+        <div class="pr-bubble">正在校對中...</div>
+    `;
+    messagesContainer.appendChild(loadingDiv);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+    try {
+        // 調用校稿 API
+        const result = await proofreadContent(userMessage, proofreadSessionId);
+
+        // 移除加載訊息
+        messagesContainer.removeChild(loadingDiv);
+
+        if (result.success) {
+            // 更新會話ID
+            proofreadSessionId = result.session_id;
+
+            // 顯示 AI 回應
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'pr-message pr-ai';
+            messageDiv.innerHTML = `
+                <div class="pr-avatar pr-ai-avatar">
+                    <img src="./proofreading.png" alt="校稿助理" onerror="this.style.display='none';this.closest('.pr-ai-avatar').classList.add('fallback');">
+                    <span class="fallback-text">校</span>
+                </div>
+                <div class="pr-bubble">${escapeHtml(result.response)}</div>
+            `;
+            messagesContainer.appendChild(messageDiv);
+        } else {
+            // 顯示錯誤訊息
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'pr-message pr-ai';
+            errorDiv.innerHTML = `
+                <div class="pr-avatar pr-ai-avatar">
+                    <img src="./proofreading.png" alt="校稿助理" onerror="this.style.display='none';this.closest('.pr-ai-avatar').classList.add('fallback');">
+                    <span class="fallback-text">校</span>
+                </div>
+                <div class="pr-bubble">抱歉，校對過程中發生錯誤：${escapeHtml(result.error)}</div>
+            `;
+            messagesContainer.appendChild(errorDiv);
+        }
+    } catch (error) {
+        // 移除加載訊息
+        messagesContainer.removeChild(loadingDiv);
+
+        // 顯示錯誤
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'pr-message pr-ai';
+        errorDiv.innerHTML = `
             <div class="pr-avatar pr-ai-avatar">
                 <img src="./proofreading.png" alt="校稿助理" onerror="this.style.display='none';this.closest('.pr-ai-avatar').classList.add('fallback');">
                 <span class="fallback-text">校</span>
             </div>
-            <div class="pr-bubble">已收到您的文稿,正在校對中...</div>
+            <div class="pr-bubble">抱歉，校對過程中發生未預期錯誤</div>
         `;
-        messagesContainer.appendChild(messageDiv);
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    }, 500);
+        messagesContainer.appendChild(errorDiv);
+    }
+
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
 function escapeHtml(text) {
@@ -351,26 +572,82 @@ function escapeHtml(text) {
 }
 
 // ==================== 文宣生成 ====================
+let currentTaskId = null; // 保存當前任務ID
+
 function initContentGeneration() {
     // 由 HTML onclick 觸發
 }
 
-function generateContent() {
+async function generateContent() {
     const contentType = document.getElementById('contentType')?.value;
     const prompt = document.getElementById('genPrompt')?.value;
-    
+
     if (!prompt?.trim()) {
         showNotification('請輸入生成指令', 'warning');
         return;
     }
-    
+
     const outputDiv = document.getElementById('generatedContent');
     if (outputDiv) {
-        outputDiv.innerHTML = '<div class="placeholder-text"><p>生成中...</p></div>';
-        
-        setTimeout(() => {
-            outputDiv.innerHTML = `<p>這是根據您的指令生成的${contentType}內容...</p>`;
-        }, 1000);
+        outputDiv.innerHTML = '<div class="placeholder-text"><p>生成中，請稍候...</p></div>';
+
+        try {
+            // 將內容類型轉換為 style 參數
+            let style = 'formal';
+            switch (contentType) {
+                case 'press':
+                    style = 'formal';
+                    break;
+                case 'speech':
+                    style = 'formal';
+                    break;
+                case 'facebook':
+                    style = 'casual';
+                    break;
+                case 'instagram':
+                    style = 'casual';
+                    break;
+                case 'poster':
+                    style = 'concise';
+                    break;
+            }
+
+            // 調用文案生成 API
+            const result = await generateStaffContent(prompt, style, 'medium');
+
+            if (result.success) {
+                // 保存任務ID
+                currentTaskId = result.task_id;
+
+                // 顯示生成的內容
+                outputDiv.innerHTML = `
+                    <div style="white-space: pre-wrap; line-height: 1.8;">
+                        ${escapeHtml(result.content)}
+                    </div>
+                    <div style="margin-top: 1rem; padding: 0.5rem; background: #f0f9ff; border-radius: 4px; font-size: 0.875rem; color: #0369a1;">
+                        ✅ ${result.message || '文案生成完成'}
+                        <br>任務ID: ${result.task_id}
+                    </div>
+                `;
+
+                showNotification('✅ 文案生成成功！', 'success');
+            } else {
+                outputDiv.innerHTML = `
+                    <div class="placeholder-text" style="color: #dc2626;">
+                        <p>❌ 生成失敗: ${escapeHtml(result.error)}</p>
+                    </div>
+                `;
+                showNotification(`生成失敗: ${result.error}`, 'error');
+            }
+        } catch (error) {
+            console.error('生成錯誤:', error);
+            outputDiv.innerHTML = `
+                <div class="placeholder-text" style="color: #dc2626;">
+                    <p>❌ 生成過程中發生未預期錯誤</p>
+                </div>
+            `;
+            showNotification('生成過程中發生錯誤', 'error');
+        }
     }
 }
 
@@ -695,5 +972,82 @@ function initLogout() {
 // ==================== 通知系統 ====================
 function showNotification(message, type = 'info') {
     console.log(`[${type.toUpperCase()}] ${message}`);
-    alert(message);
+
+    // 創建通知元素
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 1rem 1.5rem;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10000;
+        max-width: 400px;
+        animation: slideIn 0.3s ease-out;
+        font-size: 14px;
+        line-height: 1.5;
+    `;
+
+    // 根據類型設置顏色
+    switch(type) {
+        case 'success':
+            notification.style.background = '#10b981';
+            notification.style.color = 'white';
+            break;
+        case 'error':
+            notification.style.background = '#ef4444';
+            notification.style.color = 'white';
+            break;
+        case 'warning':
+            notification.style.background = '#f59e0b';
+            notification.style.color = 'white';
+            break;
+        default:
+            notification.style.background = '#3b82f6';
+            notification.style.color = 'white';
+    }
+
+    notification.textContent = message;
+    document.body.appendChild(notification);
+
+    // 3秒後自動移除
+    setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease-out';
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 300);
+    }, 3000);
+}
+
+// 添加動畫樣式
+if (!document.getElementById('notification-styles')) {
+    const style = document.createElement('style');
+    style.id = 'notification-styles';
+    style.textContent = `
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+        }
+    `;
+    document.head.appendChild(style);
 }

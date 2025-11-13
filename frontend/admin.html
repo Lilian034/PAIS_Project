@@ -74,28 +74,9 @@
                                 <span>操作</span>
                             </div>
 
-                            <div class="document-item document-item--3">
-                                <span class="file-name">教育政策白皮書.pdf</span>
-                                <span>2024-01-15 10:30</span>
-                                <div class="actions">
-                                    <button class="btn-small danger" onclick="deleteDocument(this)">刪除</button>
-                                    <button class="btn-small" onclick="window.open('./files/教育政策白皮書.pdf','_blank')">查看檔案</button>
-                                </div>
-                            </div>
-
-                            <div class="document-item document-item--3">
-                                <span class="file-name">市政規劃報告.docx</span>
-                                <span>2024-01-14 15:45</span>
-                                <div class="actions">
-                                    <button class="btn-small danger" onclick="deleteDocument(this)">刪除</button>
-                                    <button class="btn-small" onclick="window.open('./files/市政規劃報告.docx','_blank')">查看檔案</button>
-                                </div>
-                            </div>
-
-                            <div class="empty-state hidden">
+                            <div class="empty-state">
                                 <div class="empty-illustration">📂</div>
-                                <p>尚未有任何上傳的文檔</p>
-                                <small>從左側「上傳文檔」選取檔案,或拖曳檔案至此頁上傳</small>
+                                <p>正在載入文檔列表...</p>
                             </div>
                         </div>
                     </div>
@@ -336,6 +317,7 @@
         </main>
     </div>
 
+    <script src="api.js"></script>
     <script src="admin.js"></script>
 </body>
 </html>
