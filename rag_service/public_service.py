@@ -823,7 +823,15 @@ async def upload_file(
             }
 
         for doc in docs:
-            relative_path = file_path.relative_to(Path.cwd())
+            # 確保 file_path 是絕對路徑，然後計算相對於工作目錄的路徑
+            abs_file_path = file_path.resolve()
+            abs_cwd = Path.cwd().resolve()
+            try:
+                relative_path = abs_file_path.relative_to(abs_cwd)
+            except ValueError:
+                # 如果無法計算相對路徑，直接使用檔案路徑
+                relative_path = file_path
+
             doc.metadata["source"] = str(relative_path).replace("\\", "/")
             doc.metadata["uploaded_at"] = datetime.now().isoformat()
             doc.metadata["filename"] = file_path.name
