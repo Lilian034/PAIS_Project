@@ -727,9 +727,11 @@ async function sendProofreadRequest(userMessage) {
     try {
         // 判斷是否為首次對話（沒有 session_id）
         const isFirstMessage = !proofreadSessionId;
+        console.log('📝 校稿請求 - 當前 session_id:', proofreadSessionId, '是否首次對話:', isFirstMessage);
 
         // 調用校稿 API
         const result = await proofreadContent(userMessage, proofreadSessionId, isFirstMessage);
+        console.log('📡 API 返回:', result);
 
         // 移除加載訊息
         messagesContainer.removeChild(loadingDiv);
@@ -737,6 +739,7 @@ async function sendProofreadRequest(userMessage) {
         if (result.success) {
             // 更新會話ID
             proofreadSessionId = result.session_id;
+            console.log('✅ 會話 ID 已更新:', proofreadSessionId);
 
             // 顯示 AI 回應
             const messageDiv = document.createElement('div');

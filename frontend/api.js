@@ -79,15 +79,24 @@ async function proofreadContent(text, sessionId = null, isFirstMessage = false) 
             ? `請幫我校稿以下內容，檢查語法、用詞和事實正確性：\n\n${text}`
             : text;
 
+        console.log('🔍 proofreadContent 調用參數:', {
+            sessionId,
+            isFirstMessage,
+            messageLength: message.length
+        });
+
+        const requestBody = {
+            message: message,
+            session_id: sessionId
+        };
+        console.log('📤 發送到後端:', requestBody);
+
         const response = await fetch('/api/chat', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                message: message,
-                session_id: sessionId
-            })
+            body: JSON.stringify(requestBody)
         });
 
         if (!response.ok) {
@@ -95,6 +104,8 @@ async function proofreadContent(text, sessionId = null, isFirstMessage = false) 
         }
 
         const data = await response.json();
+        console.log('📥 後端返回:', data);
+
         return {
             success: true,
             response: data.reply,  // 後端返回的是 'reply' 而非 'response'
