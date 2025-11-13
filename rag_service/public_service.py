@@ -974,6 +974,44 @@ async def list_documents(admin: bool = Depends(verify_admin)):
         raise HTTPException(status_code=500, detail=f"列出文檔失敗: {str(e)}")
 
 
+@app.get("/api/documents/{file_path:path}/download")
+async def download_document(file_path: str):
+    """下載知識庫中的文檔（不需要密碼驗證，方便下載）"""
+    try:
+        from fastapi.responses import FileResponse
+
+        docs_dir = Path("documents")
+        target_file = docs_dir / file_path
+
+        # 安全檢查：確保文件在 documents 目錄內
+        try:
+            target_file = target_file.resolve()
+            docs_dir = docs_dir.resolve()
+            if not str(target_file).startswith(str(docs_dir)):
+                raise HTTPException(status_code=400, detail="不允許訪問此路徑")
+        except Exception:
+            raise HTTPException(status_code=400, detail="無效的文件路徑")
+
+        if not target_file.exists():
+            raise HTTPException(status_code=404, detail="文件不存在")
+
+        if not target_file.is_file():
+            raise HTTPException(status_code=400, detail="只能下載文件")
+
+        logger.info(f"📥 下載文檔: {file_path}")
+
+        return FileResponse(
+            path=str(target_file),
+            filename=target_file.name,
+            media_type='application/octet-stream'
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ 下載文檔失敗 ({file_path}): {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"下載文檔失敗: {str(e)}")
+
+
 @app.delete("/api/documents/{file_path:path}")
 async def delete_document(file_path: str, admin: bool = Depends(verify_admin)):
     """刪除知識庫中的文檔"""
