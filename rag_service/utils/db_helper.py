@@ -59,7 +59,19 @@ class StaffDatabase:
                 FOREIGN KEY (task_id) REFERENCES content_tasks(id)
             )
         """)
-        
+
+        # 訪客計數器表
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS visitor_stats (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                month TEXT NOT NULL UNIQUE,
+                count INTEGER NOT NULL DEFAULT 0,
+                last_reset TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+        """)
+
         conn.commit()
         conn.close()
         logger.info(f"✅ 資料庫初始化完成: {self.db_path}")
@@ -260,5 +272,93 @@ class StaffDatabase:
         affected = cursor.rowcount
         conn.commit()
         conn.close()
-        
+
         return affected > 0
+
+    # ==================== Visitor Stats ====================
+
+    def increment_visitor_count(self) -> Dict[str, Any]:
+        """增加訪客計數，並檢查是否需要重置（每月1號）"""
+        from datetime import datetime
+
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        now = datetime.now()
+        current_month = now.strftime("%Y-%m")
+
+        # 檢查當月記錄是否存在
+        cursor.execute(
+            "SELECT * FROM visitor_stats WHERE month = ?",
+            (current_month,)
+        )
+        row = cursor.fetchone()
+
+        if row:
+            # 記錄存在，增加計數
+            new_count = row['count'] + 1
+            cursor.execute("""
+                UPDATE visitor_stats
+                SET count = ?, updated_at = ?
+                WHERE month = ?
+            """, (new_count, now.isoformat(), current_month))
+
+            result = {
+                'month': current_month,
+                'count': new_count,
+                'last_reset': row['last_reset']
+            }
+        else:
+            # 新月份，創建新記錄
+            cursor.execute("""
+                INSERT INTO visitor_stats
+                (month, count, last_reset, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+            """, (current_month, 1, now.isoformat(), now.isoformat(), now.isoformat()))
+
+            result = {
+                'month': current_month,
+                'count': 1,
+                'last_reset': now.isoformat()
+            }
+
+        conn.commit()
+        conn.close()
+
+        logger.info(f"👥 訪客計數: {current_month} - {result['count']}")
+        return result
+
+    def get_visitor_stats(self, month: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """取得訪客統計數據"""
+        from datetime import datetime
+
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        if not month:
+            month = datetime.now().strftime("%Y-%m")
+
+        cursor.execute(
+            "SELECT * FROM visitor_stats WHERE month = ?",
+            (month,)
+        )
+        row = cursor.fetchone()
+        conn.close()
+
+        if row:
+            return dict(row)
+        return None
+
+    def get_all_visitor_stats(self, limit: int = 12) -> List[Dict[str, Any]]:
+        """取得所有訪客統計（最近N個月）"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            "SELECT * FROM visitor_stats ORDER BY month DESC LIMIT ?",
+            (limit,)
+        )
+        rows = cursor.fetchall()
+        conn.close()
+
+        return [dict(row) for row in rows]
