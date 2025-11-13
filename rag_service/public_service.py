@@ -289,22 +289,35 @@ staff_agent_prompt = PromptTemplate(
     input_variables=["input", "chat_history", "agent_scratchpad", "tools", "tool_names"]
 )
 
-# 創建 Agent
+# 創建 Agent（公眾版 - 善寶）
 try:
     agent = create_react_agent(
         llm=llm,
         tools=tools,
         prompt=agent_prompt
     )
-    logger.info("✅ ReAct Agent 創建成功")
+    logger.info("✅ ReAct Agent (公眾版) 創建成功")
 except Exception as agent_create_err:
     try:
-        # --- 修正: 將錯誤物件轉為字串再格式化 ---
         logger.error(f"❌ 創建 Agent 失敗: {str(agent_create_err)}", exc_info=True)
     except Exception as log_err:
-        # 如果 logger 本身也出錯，提供備用日誌
         logger.error(f"❌ 創建 Agent 失敗，且 Logger 也發生錯誤: {log_err}")
-    agent = None # 標記 Agent 創建失敗
+    agent = None
+
+# 創建 Staff Agent（幕僚版）
+try:
+    staff_agent = create_react_agent(
+        llm=llm,
+        tools=tools,
+        prompt=staff_agent_prompt
+    )
+    logger.info("✅ ReAct Agent (幕僚版) 創建成功")
+except Exception as staff_agent_create_err:
+    try:
+        logger.error(f"❌ 創建 Staff Agent 失敗: {str(staff_agent_create_err)}", exc_info=True)
+    except Exception as log_err:
+        logger.error(f"❌ 創建 Staff Agent 失敗，且 Logger 也發生錯誤: {log_err}")
+    staff_agent = None
 
 # ==================== Pydantic 模型 ====================
 # (保持不變)
@@ -546,25 +559,23 @@ async def chat(request: ChatRequest):
     try:
         logger.info(f"💬 [{session_id}] 收到問題 (角色: {request.role}): {request.message}")
 
-        if not agent and request.use_agent:
-             logger.error(f"❌ Agent 未成功初始化，無法處理 Agent 請求 ({session_id})")
-             raise HTTPException(status_code=500, detail="系統 Agent 元件啟動失敗，請稍後再試。")
-
         memory = get_memory(session_id)
 
         if request.use_agent:
             memory.output_key = "output"
 
-            # 根據角色選擇不同的 prompt 創建 agent
+            # 根據角色選擇預先創建的 agent
             if request.role == "staff":
-                current_agent = create_react_agent(
-                    llm=llm,
-                    tools=tools,
-                    prompt=staff_agent_prompt
-                )
+                if not staff_agent:
+                    logger.error(f"❌ Staff Agent 未成功初始化，無法處理幕僚請求 ({session_id})")
+                    raise HTTPException(status_code=500, detail="幕僚系統 Agent 元件啟動失敗，請稍後再試。")
+                current_agent = staff_agent
                 logger.info(f"🎭 使用幕僚助理模式")
             else:
-                current_agent = agent  # 使用預設的公眾版 agent
+                if not agent:
+                    logger.error(f"❌ Agent 未成功初始化，無法處理公眾請求 ({session_id})")
+                    raise HTTPException(status_code=500, detail="系統 Agent 元件啟動失敗，請稍後再試。")
+                current_agent = agent
                 logger.info(f"🎭 使用善寶模式")
 
             agent_executor = AgentExecutor(
@@ -649,8 +660,9 @@ async def chat(request: ChatRequest):
 
     # 主 try 區塊的 except
     except Exception as e:
-        logger.error(f"❌ 對話處理中發生未預期錯誤 ({session_id}): {e}", exc_info=True)
-        error_thought_process = f"系統層級錯誤: {str(e)}"
+        error_msg = str(e).replace('{', '{{').replace('}', '}}')  # 轉義大括號避免格式化錯誤
+        logger.error(f"❌ 對話處理中發生未預期錯誤 ({session_id}): {error_msg}", exc_info=True)
+        error_thought_process = f"系統層級錯誤: {error_msg}"
         if result and isinstance(result, dict):
             error_thought_process += f"\n最後的 Agent/Chain 結果: {str(result)[:500]}..."
 
