@@ -415,14 +415,54 @@ async function listDocuments() {
         const data = await response.json();
         return {
             success: true,
-            documents: data.documents || []
+            documents: data.documents || [],
+            total: data.total || 0
         };
     } catch (error) {
         console.error('取得文檔列表失敗:', error);
         return {
             success: false,
             error: error.message,
-            documents: []
+            documents: [],
+            total: 0
+        };
+    }
+}
+
+/**
+ * 刪除知識庫中的文檔
+ */
+async function deleteDocument(filePath) {
+    try {
+        const response = await fetch(`${API_BASE_URL}/documents/${encodeURIComponent(filePath)}`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${getStaffPassword()}`
+            }
+        });
+
+        if (!response.ok) {
+            if (response.status === 401) {
+                throw new Error('密碼錯誤');
+            }
+            if (response.status === 404) {
+                throw new Error('文件不存在');
+            }
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        return {
+            success: true,
+            message: data.message,
+            filename: data.filename
+        };
+    } catch (error) {
+        console.error('刪除文檔失敗:', error);
+        return {
+            success: false,
+            error: error.message
         };
     }
 }

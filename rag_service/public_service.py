@@ -932,6 +932,86 @@ async def clear_memory(session_id: str, admin: bool = Depends(verify_admin)):
         raise HTTPException(status_code=500, detail=f"清除記憶失敗: {str(e)}")
 
 
+@app.get("/api/documents")
+async def list_documents(admin: bool = Depends(verify_admin)):
+    """列出知識庫中的所有文檔"""
+    try:
+        docs_dir = Path("documents")
+        if not docs_dir.exists():
+            return {"documents": []}
+
+        documents = []
+
+        # 遍歷所有文件（包括子目錄）
+        for file_path in docs_dir.rglob("*"):
+            if file_path.is_file():
+                try:
+                    stat_info = file_path.stat()
+                    relative_path = file_path.relative_to(docs_dir)
+
+                    documents.append({
+                        "filename": file_path.name,
+                        "path": str(relative_path).replace("\\", "/"),
+                        "full_path": str(file_path),
+                        "size": stat_info.st_size,
+                        "uploaded_at": datetime.fromtimestamp(stat_info.st_mtime).isoformat(),
+                        "extension": file_path.suffix
+                    })
+                except Exception as file_err:
+                    logger.warning(f"⚠️ 無法讀取文件資訊: {file_path}, 錯誤: {file_err}")
+                    continue
+
+        # 按上傳時間排序（新到舊）
+        documents.sort(key=lambda x: x["uploaded_at"], reverse=True)
+
+        logger.info(f"📂 列出文檔列表，共 {len(documents)} 個文件")
+        return {
+            "documents": documents,
+            "total": len(documents)
+        }
+    except Exception as e:
+        logger.error(f"❌ 列出文檔失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"列出文檔失敗: {str(e)}")
+
+
+@app.delete("/api/documents/{file_path:path}")
+async def delete_document(file_path: str, admin: bool = Depends(verify_admin)):
+    """刪除知識庫中的文檔"""
+    try:
+        docs_dir = Path("documents")
+        target_file = docs_dir / file_path
+
+        # 安全檢查：確保文件在 documents 目錄內
+        try:
+            target_file = target_file.resolve()
+            docs_dir = docs_dir.resolve()
+            if not str(target_file).startswith(str(docs_dir)):
+                raise HTTPException(status_code=400, detail="不允許訪問此路徑")
+        except Exception:
+            raise HTTPException(status_code=400, detail="無效的文件路徑")
+
+        if not target_file.exists():
+            raise HTTPException(status_code=404, detail="文件不存在")
+
+        if not target_file.is_file():
+            raise HTTPException(status_code=400, detail="只能刪除文件，不能刪除目錄")
+
+        # 刪除文件
+        filename = target_file.name
+        target_file.unlink()
+        logger.info(f"🗑️ 已刪除文檔: {file_path}")
+
+        return {
+            "message": f"✅ 已刪除文檔: {filename}",
+            "filename": filename
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ 刪除文檔失敗 ({file_path}): {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"刪除文檔失敗: {str(e)}")
+
+
 @app.get("/api/stats")
 async def get_stats():
     """取得系統統計資訊"""

@@ -62,9 +62,105 @@ function initDocumentManagement() {
             }
         });
     }
-    
+
     initDocumentSearch();
-    initDocumentSort()
+    initDocumentSort();
+
+    // 載入文檔列表
+    loadDocumentsList();
+}
+
+/**
+ * 從後端載入文檔列表
+ */
+async function loadDocumentsList() {
+    try {
+        const result = await listDocuments();
+
+        const documentsList = document.querySelector('.documents-list');
+        const emptyState = documentsList.querySelector('.empty-state');
+
+        if (result.success && result.documents.length > 0) {
+            // 移除空狀態
+            if (emptyState) {
+                emptyState.remove();
+            }
+
+            // 獲取 list-header
+            const header = documentsList.querySelector('.list-header');
+
+            // 清除舊的文檔項目（保留 header）
+            const oldItems = documentsList.querySelectorAll('.document-item:not(.list-header)');
+            oldItems.forEach(item => item.remove());
+
+            // 添加文檔
+            result.documents.forEach(doc => {
+                const item = createDocumentItemFromAPI(doc);
+                if (header && header.nextSibling) {
+                    documentsList.insertBefore(item, header.nextSibling);
+                } else {
+                    documentsList.appendChild(item);
+                }
+            });
+
+            console.log(`✅ 已載入 ${result.documents.length} 個文檔`);
+        } else {
+            // 顯示空狀態
+            if (emptyState) {
+                emptyState.innerHTML = `
+                    <div class="empty-illustration">📂</div>
+                    <p>尚未有任何上傳的文檔</p>
+                    <small>從左側「上傳文檔」選取檔案</small>
+                `;
+            }
+        }
+    } catch (error) {
+        console.error('載入文檔列表失敗:', error);
+        const emptyState = document.querySelector('.empty-state');
+        if (emptyState) {
+            emptyState.innerHTML = `
+                <div class="empty-illustration">❌</div>
+                <p>載入文檔列表失敗</p>
+                <small>${error.message}</small>
+            `;
+        }
+    }
+}
+
+/**
+ * 從 API 資料創建文檔項目
+ */
+function createDocumentItemFromAPI(doc) {
+    const item = document.createElement('div');
+    item.className = 'document-item document-item--3';
+    item.dataset.filePath = doc.path;
+
+    // 格式化時間
+    const uploadDate = new Date(doc.uploaded_at);
+    const timeString = `${uploadDate.getFullYear()}-${pad(uploadDate.getMonth() + 1)}-${pad(uploadDate.getDate())} ${pad(uploadDate.getHours())}:${pad(uploadDate.getMinutes())}`;
+
+    // 格式化文件大小
+    const sizeStr = formatFileSize(doc.size);
+
+    item.innerHTML = `
+        <span class="file-name" title="${doc.path}">${doc.filename}</span>
+        <span title="${sizeStr}">${timeString}</span>
+        <div class="actions">
+            <button class="btn-small danger" onclick="deleteDocumentFromBackend(this)">刪除</button>
+        </div>
+    `;
+    return item;
+}
+
+/**
+ * 格式化文件大小
+ */
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
 }
 
 function initDocumentSearch() {
@@ -177,29 +273,19 @@ function createDocumentItem(file) {
 }
 
 async function handleDocumentUpload(files) {
+    let uploadCount = 0;
+    let successCount = 0;
+
     for (const file of Array.from(files)) {
         try {
-            showNotification(`正在上傳 ${file.name}...`, 'info');
+            uploadCount++;
+            showNotification(`正在上傳 ${file.name}... (${uploadCount}/${files.length})`, 'info');
 
             // 調用 API 上傳文件
             const result = await uploadFile(file);
 
             if (result.success) {
-                // 上傳成功，加入清單
-                const fileItem = createDocumentItem(file);
-                const documentsList = document.querySelector('.documents-list');
-
-                // 找到 list-header 後面插入
-                const header = documentsList.querySelector('.list-header');
-                if (header && header.nextSibling) {
-                    documentsList.insertBefore(fileItem, header.nextSibling);
-                } else {
-                    documentsList.appendChild(fileItem);
-                }
-
-                const empty = documentsList.querySelector('.empty-state');
-                if (empty) empty.classList.add('hidden');
-
+                successCount++;
                 showNotification(`✅ ${file.name} 上傳成功！已加入知識庫 (${result.chunks || 0} 個分塊)`, 'success');
             } else {
                 showNotification(`❌ ${file.name} 上傳失敗: ${result.error}`, 'error');
@@ -208,6 +294,12 @@ async function handleDocumentUpload(files) {
             console.error('上傳錯誤:', error);
             showNotification(`❌ ${file.name} 上傳失敗: ${error.message}`, 'error');
         }
+    }
+
+    // 上傳完成後重新載入文檔列表
+    if (successCount > 0) {
+        showNotification(`✅ 上傳完成！成功 ${successCount} 個，共 ${uploadCount} 個`, 'success');
+        await loadDocumentsList();
     }
 }
 
@@ -220,16 +312,43 @@ function viewFile(btn) {
     }
 }
 
-function deleteDocument(btn) {
+/**
+ * 從後端刪除文檔
+ */
+async function deleteDocumentFromBackend(btn) {
     const item = btn.closest('.document-item');
-    if (item) item.remove();
-    
-    const list = document.querySelector('.documents-list');
-    const empty = list?.querySelector('.empty-state');
-    if (list && !list.querySelector('.document-item') && empty) {
-        empty.classList.remove('hidden');
+    if (!item) return;
+
+    const filePath = item.dataset.filePath;
+    const fileName = item.querySelector('.file-name')?.textContent || '文件';
+
+    if (!filePath) {
+        showNotification('無法獲取文件路徑', 'error');
+        return;
     }
-    showNotification('已刪除', 'success');
+
+    // 確認刪除
+    if (!confirm(`確定要刪除「${fileName}」嗎？此操作無法恢復。`)) {
+        return;
+    }
+
+    try {
+        showNotification(`正在刪除 ${fileName}...`, 'info');
+
+        // 調用 API 刪除文件
+        const result = await deleteDocument(filePath);
+
+        if (result.success) {
+            showNotification(`✅ ${fileName} 已刪除`, 'success');
+            // 重新載入文檔列表
+            await loadDocumentsList();
+        } else {
+            showNotification(`❌ 刪除失敗: ${result.error}`, 'error');
+        }
+    } catch (error) {
+        console.error('刪除錯誤:', error);
+        showNotification(`❌ 刪除失敗: ${error.message}`, 'error');
+    }
 }
 
 function pad(n) {
