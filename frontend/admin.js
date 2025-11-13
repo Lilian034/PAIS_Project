@@ -652,6 +652,16 @@ async function sendProofreadRequest(userMessage) {
             proofreadSessionId = result.session_id;
             console.log('✅ 會話 ID 已更新:', proofreadSessionId);
 
+            // 建立來源顯示（如果有的話）
+            let sourcesHtml = '';
+            if (result.sources && result.sources.length > 0) {
+                const sourcesList = result.sources.map(s => `<span style="display: inline-block; padding: 2px 8px; background: #e0f2fe; color: #0369a1; border-radius: 4px; font-size: 0.75rem; margin: 2px;">📄 ${escapeHtml(s)}</span>`).join('');
+                sourcesHtml = `<div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid #e5e7eb; font-size: 0.85rem; color: #6b7280;">
+                    <span style="font-weight: 500;">📚 參考來源：</span>
+                    <div style="margin-top: 0.25rem;">${sourcesList}</div>
+                </div>`;
+            }
+
             // 顯示 AI 回應
             const messageDiv = document.createElement('div');
             messageDiv.className = 'pr-message pr-ai';
@@ -660,7 +670,10 @@ async function sendProofreadRequest(userMessage) {
                     <img src="./proofreading.png" alt="校稿助理" onerror="this.style.display='none';this.closest('.pr-ai-avatar').classList.add('fallback');">
                     <span class="fallback-text">校</span>
                 </div>
-                <div class="pr-bubble">${escapeHtml(result.response)}</div>
+                <div class="pr-bubble">
+                    ${escapeHtml(result.response)}
+                    ${sourcesHtml}
+                </div>
             `;
             messagesContainer.appendChild(messageDiv);
         } else {

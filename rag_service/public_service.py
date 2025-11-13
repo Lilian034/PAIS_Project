@@ -648,7 +648,19 @@ async def chat(request: ChatRequest):
             else:
                  thought_process_str = "Agent 未成功產生輸出。"
 
-            sources = [] # Agent 模式下 sources 暫不處理
+            # 從 Agent 的中間步驟提取工具使用記錄作為來源
+            sources = []
+            if "intermediate_steps" in result:
+                for action, observation in result["intermediate_steps"]:
+                    tool_name = action.tool if hasattr(action, 'tool') else '未知工具'
+                    # 如果使用了知識庫工具，標記為來源
+                    if tool_name in ["搜尋知識庫", "查詢特定政策名稱"]:
+                        sources.append(f"{tool_name}")
+                logger.info(f"📚 [{session_id}] 從 Agent 中間步驟提取到 {len(sources)} 個工具使用記錄")
+
+            # 如果 sources 為空但有成功回覆，表示可能沒有使用工具
+            if not sources and reply and reply != "抱歉，我好像有點詞窮了，可以換個方式問嗎？":
+                sources = []  # 保持為空，表示未使用知識庫
 
         else: # 使用 RAG Chain
             memory.output_key = "answer"
