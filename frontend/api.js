@@ -5,7 +5,7 @@ const API_BASE_URL = '/api';
 const STAFF_API_URL = '/api/staff';
 
 // 從環境變數或 localStorage 獲取密碼
-let STAFF_PASSWORD = 'staff123456'; // 默認密碼，建議從登入後存儲
+let STAFF_PASSWORD = 'admin123456'; // 默認密碼，建議從登入後存儲
 
 /**
  * 設置管理員密碼
