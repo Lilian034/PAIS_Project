@@ -640,6 +640,7 @@ let proofreadSessionId = null; // 保存會話ID
 function initProofreading() {
     const sendBtn = document.getElementById('pr-sendBtn');
     const messageInput = document.getElementById('pr-messageInput');
+    const clearBtn = document.getElementById('clearProofreadChat');
 
     if (!sendBtn || !messageInput) return;
 
@@ -658,6 +659,41 @@ function initProofreading() {
             sendBtn.click();
         }
     });
+
+    // 清除對話按鈕
+    if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+            clearProofreadChat();
+        });
+    }
+}
+
+/**
+ * 清除校稿對話記憶
+ */
+function clearProofreadChat() {
+    if (!confirm('確定要清除對話記憶嗎？這將開始一個新的對話。')) {
+        return;
+    }
+
+    // 重置 session ID
+    proofreadSessionId = null;
+
+    // 清除對話框內容（保留初始歡迎訊息）
+    const messagesContainer = document.getElementById('pr-chatMessages');
+    if (messagesContainer) {
+        messagesContainer.innerHTML = `
+            <div class="pr-message pr-ai">
+                <div class="pr-avatar pr-ai-avatar">
+                    <img src="./proofreading.png" alt="校稿助理" onerror="this.style.display='none';this.closest('.pr-ai-avatar').classList.add('fallback');">
+                    <span class="fallback-text">校</span>
+                </div>
+                <div class="pr-bubble">您好～我在這裡幫你校正文稿、逐字稿。請直接貼上文字。</div>
+            </div>
+        `;
+    }
+
+    showNotification('✅ 對話已清除，已開始新的對話', 'success');
 }
 
 function addUserMessage(text) {
@@ -689,8 +725,11 @@ async function sendProofreadRequest(userMessage) {
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
     try {
+        // 判斷是否為首次對話（沒有 session_id）
+        const isFirstMessage = !proofreadSessionId;
+
         // 調用校稿 API
-        const result = await proofreadContent(userMessage, proofreadSessionId);
+        const result = await proofreadContent(userMessage, proofreadSessionId, isFirstMessage);
 
         // 移除加載訊息
         messagesContainer.removeChild(loadingDiv);
