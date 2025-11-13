@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# 虛擬環境
+venv/
+env/
+ENV/
+
+# 環境變數
+.env
+
+# 日誌文件
+logs/
+*.log
+
+# Qdrant 向量資料庫存儲
+qdrant_storage/
+
+# 生成的內容
+generated_content/
+
+# 聊天歷史
+chat_history/
+
+# 數據庫
+database/
+*.db
+*.sqlite
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 臨時文件
+*.tmp
+*.bak
