@@ -37,6 +37,9 @@ from langchain.chains import (
 from dotenv import load_dotenv
 from loguru import logger
 
+# 載入數據庫輔助類
+from utils.db_helper import StaffDatabase
+
 # 載入環境變數
 load_dotenv()
 
@@ -104,6 +107,9 @@ vectorstore = Qdrant(
     collection_name=COLLECTION_NAME,
     embeddings=embeddings
 )
+
+# ==================== 訪客計數器數據庫 ====================
+db = StaffDatabase()
 
 # ==================== LangChain Memory 管理 ====================
 memory_store: Dict[str, ConversationBufferMemory] = {}
@@ -244,28 +250,104 @@ Final Answer: 市民您好！桃園的交通建設是市府團隊非常重視的
 Question: {input}
 Thought: {agent_scratchpad}"""
 
+# 幕僚專用 Agent Prompt（資料校稿專用 - 不拟稿，只校對）
+STAFF_AGENT_PROMPT = """你是市府幕僚的專業校對助理，專門協助文稿校對、資料核實和錯誤檢查。你的任務是根據提供的工具和對話記錄，提供專業、準確的校對意見。
+
+**你的核心任務：**
+1. **矯正專有詞翻譯錯誤** - 檢查專有名詞、地名、人名是否正確
+2. **檢查專業知識轉譯** - 確認專業術語、政策名稱是否準確
+3. **事實核實** - 使用知識庫工具核對數據、日期、政策內容
+4. **語法檢查** - 指出語法錯誤、用詞不當
+5. **風格建議** - 提供文字優化建議
+
+**你的身份：**
+- 專業校對助理，使用「我」自稱
+- **不是拟稿人員**，不需要生成新內容
+- **不要自稱善寶或市長**
+
+**你的回答方式：**
+當幕僚貼上文稿請你校對時，你應該：
+1. 指出發現的錯誤（專有詞、翻譯、事實、語法）
+2. 提供正確的版本或建議
+3. 如需核實事實，使用知識庫工具查詢
+4. 回答要清晰、有條理、易於理解
+
+**範例說明：**
+幕僚貼上：「市長今天到松山機場視察，共建設了50座社會住宅。」
+
+✅ 正確的校對回應：
+「我發現以下需要修正的地方：
+1. 地名錯誤：應為『桃園國際機場』，不是松山機場
+2. 數據需核實：讓我查詢知識庫...（使用工具）
+   根據知識庫資料，桃園市規劃的社會住宅數量為 X 座，請確認此數字」
+
+❌ 錯誤（開始拟稿）：
+「我為您重新擬寫：各位市民朋友...」
+
+**可用工具：**
+{tools}
+**工具名稱列表 (你不需要在回答中使用這個列表):**
+{tool_names}
+
+**你【必須嚴格】遵守以下的思考與回應格式 (ReAct 格式)：**
+Question: 使用者提出的問題。
+Thought: [你的思考過程，說明你打算做什麼]。
+Action: [你選擇的工具名稱，例如：搜尋知識庫]。 **【只有在你需要使用工具時才寫這行和下一行】**
+Action Input: [提供給工具的輸入]。
+Observation: [工具返回的結果。這會由系統自動填入]。
+Thought: [檢視 Observation 後的思考，判斷是否需要再次使用工具，或可以直接回答]。
+... (可以重複 Action/Action Input/Observation/Thought 流程) ...
+Thought: 我現在已經有足夠的資訊，可以給出最終的答案了。 **【在給出最終答案前，必須有這句 Thought】**
+Final Answer: [**這裡【直接】寫出**你最終要給使用者的【完整回覆內容】，**【只需要】**包含最終答案本身，**【絕對不要】**包含任何前面的 Thought, Action, Action Input, Observation 文字。]
+
+**對話記錄 (最近的對話)：**
+{chat_history}
+
+**開始！**
+
+Question: {input}
+Thought: {agent_scratchpad}"""
+
 
 agent_prompt = PromptTemplate(
     template=AGENT_PROMPT,
     input_variables=["input", "chat_history", "agent_scratchpad", "tools", "tool_names"]
 )
 
-# 創建 Agent
+staff_agent_prompt = PromptTemplate(
+    template=STAFF_AGENT_PROMPT,
+    input_variables=["input", "chat_history", "agent_scratchpad", "tools", "tool_names"]
+)
+
+# 創建 Agent（公眾版 - 善寶）
 try:
     agent = create_react_agent(
         llm=llm,
         tools=tools,
         prompt=agent_prompt
     )
-    logger.info("✅ ReAct Agent 創建成功")
+    logger.info("✅ ReAct Agent (公眾版) 創建成功")
 except Exception as agent_create_err:
     try:
-        # --- 修正: 將錯誤物件轉為字串再格式化 ---
         logger.error(f"❌ 創建 Agent 失敗: {str(agent_create_err)}", exc_info=True)
     except Exception as log_err:
-        # 如果 logger 本身也出錯，提供備用日誌
         logger.error(f"❌ 創建 Agent 失敗，且 Logger 也發生錯誤: {log_err}")
-    agent = None # 標記 Agent 創建失敗
+    agent = None
+
+# 創建 Staff Agent（幕僚版）
+try:
+    staff_agent = create_react_agent(
+        llm=llm,
+        tools=tools,
+        prompt=staff_agent_prompt
+    )
+    logger.info("✅ ReAct Agent (幕僚版) 創建成功")
+except Exception as staff_agent_create_err:
+    try:
+        logger.error(f"❌ 創建 Staff Agent 失敗: {str(staff_agent_create_err)}", exc_info=True)
+    except Exception as log_err:
+        logger.error(f"❌ 創建 Staff Agent 失敗，且 Logger 也發生錯誤: {log_err}")
+    staff_agent = None
 
 # ==================== Pydantic 模型 ====================
 # (保持不變)
@@ -273,6 +355,7 @@ class ChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = "default"
     use_agent: bool = True
+    role: str = "public"  # "public" 或 "staff"，決定 AI 的身份
 
 class ChatResponse(BaseModel):
     reply: str
@@ -289,6 +372,11 @@ class ContentGenerationRequest(BaseModel):
 
 class IngestRequest(BaseModel):
     folder_path: str = "documents"
+
+class VisitorStatsResponse(BaseModel):
+    month: str
+    count: int
+    last_reset: str
 
 # ==================== 工具函數 ====================
 # (保持不變)
@@ -489,8 +577,14 @@ async def health_check():
 async def chat(request: ChatRequest):
     """
     對話 API (LangChain Agent + Memory 或 RAG Chain)
+    支援不同角色：public (善寶) 或 staff (幕僚助理)
     """
-    reply: str = "哎呀，善寶好像有點累了，或是網路不太穩定，請稍後再試一次喔！"
+    # 根據角色設置不同的預設錯誤訊息
+    if request.role == "staff":
+        reply: str = "抱歉，系統暫時無法回應，請稍後再試。"
+    else:
+        reply: str = "哎呀，善寶好像有點累了，或是網路不太穩定，請稍後再試一次喔！"
+
     sources: List[str] = []
     thought_process_str: Optional[str] = None
     result: Optional[Dict[str, Any]] = None
@@ -498,18 +592,29 @@ async def chat(request: ChatRequest):
     raw_agent_output: Optional[str] = None # 用於儲存 Agent 原始輸出
 
     try:
-        logger.info(f"💬 [{session_id}] 收到問題: {request.message}")
-
-        if not agent and request.use_agent:
-             logger.error(f"❌ Agent 未成功初始化，無法處理 Agent 請求 ({session_id})")
-             raise HTTPException(status_code=500, detail="系統 Agent 元件啟動失敗，請稍後再試。")
+        logger.info(f"💬 [{session_id}] 收到問題 (角色: {request.role}): {request.message}")
 
         memory = get_memory(session_id)
 
         if request.use_agent:
             memory.output_key = "output"
+
+            # 根據角色選擇預先創建的 agent
+            if request.role == "staff":
+                if not staff_agent:
+                    logger.error(f"❌ Staff Agent 未成功初始化，無法處理幕僚請求 ({session_id})")
+                    raise HTTPException(status_code=500, detail="幕僚系統 Agent 元件啟動失敗，請稍後再試。")
+                current_agent = staff_agent
+                logger.info(f"🎭 使用幕僚助理模式")
+            else:
+                if not agent:
+                    logger.error(f"❌ Agent 未成功初始化，無法處理公眾請求 ({session_id})")
+                    raise HTTPException(status_code=500, detail="系統 Agent 元件啟動失敗，請稍後再試。")
+                current_agent = agent
+                logger.info(f"🎭 使用善寶模式")
+
             agent_executor = AgentExecutor(
-                agent=agent,
+                agent=current_agent,
                 tools=tools,
                 memory=memory,
                 verbose=True,
@@ -554,7 +659,19 @@ async def chat(request: ChatRequest):
             else:
                  thought_process_str = "Agent 未成功產生輸出。"
 
-            sources = [] # Agent 模式下 sources 暫不處理
+            # 從 Agent 的中間步驟提取工具使用記錄作為來源
+            sources = []
+            if "intermediate_steps" in result:
+                for action, observation in result["intermediate_steps"]:
+                    tool_name = action.tool if hasattr(action, 'tool') else '未知工具'
+                    # 如果使用了知識庫工具，標記為來源
+                    if tool_name in ["搜尋知識庫", "查詢特定政策名稱"]:
+                        sources.append(f"{tool_name}")
+                logger.info(f"📚 [{session_id}] 從 Agent 中間步驟提取到 {len(sources)} 個工具使用記錄")
+
+            # 如果 sources 為空但有成功回覆，表示可能沒有使用工具
+            if not sources and reply and reply != "抱歉，我好像有點詞窮了，可以換個方式問嗎？":
+                sources = []  # 保持為空，表示未使用知識庫
 
         else: # 使用 RAG Chain
             memory.output_key = "answer"
@@ -590,8 +707,9 @@ async def chat(request: ChatRequest):
 
     # 主 try 區塊的 except
     except Exception as e:
-        logger.error(f"❌ 對話處理中發生未預期錯誤 ({session_id}): {e}", exc_info=True)
-        error_thought_process = f"系統層級錯誤: {str(e)}"
+        error_msg = str(e).replace('{', '{{').replace('}', '}}')  # 轉義大括號避免格式化錯誤
+        logger.error(f"❌ 對話處理中發生未預期錯誤 ({session_id}): {error_msg}", exc_info=True)
+        error_thought_process = f"系統層級錯誤: {error_msg}"
         if result and isinstance(result, dict):
             error_thought_process += f"\n最後的 Agent/Chain 結果: {str(result)[:500]}..."
 
@@ -1095,6 +1213,49 @@ async def get_stats():
     except Exception as e:
         logger.error(f"❌ 取得系統統計時發生錯誤: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"無法取得系統統計: {str(e)}")
+
+
+# ==================== 訪客計數器 API ====================
+
+@app.post("/api/visitor/increment", response_model=VisitorStatsResponse)
+async def increment_visitor():
+    """增加訪客計數"""
+    try:
+        stats = db.increment_visitor_count()
+        return VisitorStatsResponse(
+            month=stats['month'],
+            count=stats['count'],
+            last_reset=stats['last_reset']
+        )
+    except Exception as e:
+        logger.error(f"❌ 增加訪客計數時發生錯誤: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"無法增加訪客計數: {str(e)}")
+
+
+@app.get("/api/visitor/stats", response_model=VisitorStatsResponse)
+async def get_visitor_stats(month: Optional[str] = None):
+    """取得訪客統計"""
+    try:
+        stats = db.get_visitor_stats(month)
+        if stats:
+            return VisitorStatsResponse(
+                month=stats['month'],
+                count=stats['count'],
+                last_reset=stats['last_reset']
+            )
+        else:
+            # 如果沒有數據，返回當月初始值
+            from datetime import datetime
+            current_month = month or datetime.now().strftime("%Y-%m")
+            return VisitorStatsResponse(
+                month=current_month,
+                count=0,
+                last_reset=datetime.now().isoformat()
+            )
+    except Exception as e:
+        logger.error(f"❌ 取得訪客統計時發生錯誤: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"無法取得訪客統計: {str(e)}")
+
 
 # --- 啟動與關閉事件保持不變 ---
 @app.on_event("startup")
