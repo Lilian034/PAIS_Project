@@ -68,16 +68,24 @@ async function generateStaffContent(topic, style = "formal", length = "medium") 
 
 /**
  * 校稿 - 使用聊天 API
+ * @param {string} text - 用戶輸入的文本
+ * @param {string|null} sessionId - 會話 ID（用於對話記憶）
+ * @param {boolean} isFirstMessage - 是否為首次對話
  */
-async function proofreadContent(text, sessionId = null) {
+async function proofreadContent(text, sessionId = null, isFirstMessage = false) {
     try {
+        // 只在首次對話時添加校稿說明，後續對話直接發送用戶訊息以保持對話連貫性
+        const message = isFirstMessage
+            ? `請幫我校稿以下內容，檢查語法、用詞和事實正確性：\n\n${text}`
+            : text;
+
         const response = await fetch('/api/chat', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                message: `請幫我校稿以下內容，檢查語法、用詞和事實正確性：\n\n${text}`,
+                message: message,
                 session_id: sessionId
             })
         });
