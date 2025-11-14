@@ -1,9 +1,15 @@
 import os
 import json
 import re # 匯入正規表達式模組
+import ssl
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from pathlib import Path
+
+# 臨時繞過 SSL 證書驗證問題（用於網路環境有代理或防火牆的情況）
+ssl._create_default_https_context = ssl._create_unverified_context
+os.environ['CURL_CA_BUNDLE'] = ''
+os.environ['REQUESTS_CA_BUNDLE'] = ''
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Header, Form
 from fastapi.middleware.cors import CORSMiddleware
