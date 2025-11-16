@@ -997,11 +997,15 @@ function initDataMonitoring() {
     
     function render() {
         const data = load();
+
+        // 更新活躍網址數
+        updateActiveUrlCount(data.length);
+
         if (!data.length) {
             listEl.innerHTML = '<div class="empty-tip">目前沒有網址,請按右上角「新增網址」。</div>';
             return;
         }
-        
+
         listEl.innerHTML = data.map(it => `
             <div class="url-item" data-id="${it.id}">
                 <div class="url-info">
@@ -1123,41 +1127,42 @@ function refreshAnalytics() {
 
 // ==================== 訪客統計 ====================
 async function loadVisitorStats() {
+    // 載入總瀏覽數
     try {
-        // 載入總瀏覽數
         const totalResult = await getTotalVisitors();
-        if (totalResult.success) {
-            const totalEl = document.getElementById('totalVisitorCount');
-            if (totalEl) {
+        const totalEl = document.getElementById('totalVisitorCount');
+        if (totalEl) {
+            if (totalResult.success) {
                 totalEl.textContent = totalResult.total.toLocaleString('zh-TW');
+                console.log('✅ 總瀏覽數已更新:', totalResult.total);
+            } else {
+                totalEl.textContent = '--';
+                console.warn('⚠️ 載入總瀏覽數失敗:', totalResult.error);
             }
-            console.log('✅ 總瀏覽數已更新:', totalResult.total);
         }
-
-        // 載入本月瀏覽數
-        const monthlyResult = await getVisitorStats();
-        if (monthlyResult.success) {
-            const monthlyEl = document.getElementById('monthlyVisitorCount');
-            if (monthlyEl) {
-                monthlyEl.textContent = monthlyResult.count.toLocaleString('zh-TW');
-            }
-            console.log('✅ 本月瀏覽數已更新:', monthlyResult.count);
-        }
-
-        // 計算活躍網址數（從 localStorage 讀取）
-        try {
-            const urls = JSON.parse(localStorage.getItem('exposureUrls') || '[]');
-            const activeUrlEl = document.getElementById('activeUrlCount');
-            if (activeUrlEl) {
-                activeUrlEl.textContent = urls.length.toString();
-            }
-            console.log('✅ 活躍網址數已更新:', urls.length);
-        } catch (e) {
-            console.warn('⚠️ 無法計算活躍網址數:', e);
-        }
-
     } catch (error) {
-        console.error('❌ 載入訪客統計時發生錯誤:', error);
+        console.error('❌ 載入總瀏覽數時發生錯誤:', error);
+        const totalEl = document.getElementById('totalVisitorCount');
+        if (totalEl) totalEl.textContent = '--';
+    }
+
+    // 載入本月瀏覽數
+    try {
+        const monthlyResult = await getVisitorStats();
+        const monthlyEl = document.getElementById('monthlyVisitorCount');
+        if (monthlyEl) {
+            if (monthlyResult.success) {
+                monthlyEl.textContent = monthlyResult.count.toLocaleString('zh-TW');
+                console.log('✅ 本月瀏覽數已更新:', monthlyResult.count);
+            } else {
+                monthlyEl.textContent = '--';
+                console.warn('⚠️ 載入本月瀏覽數失敗:', monthlyResult.error);
+            }
+        }
+    } catch (error) {
+        console.error('❌ 載入本月瀏覽數時發生錯誤:', error);
+        const monthlyEl = document.getElementById('monthlyVisitorCount');
+        if (monthlyEl) monthlyEl.textContent = '--';
     }
 }
 
