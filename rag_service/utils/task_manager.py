@@ -4,7 +4,7 @@ from typing import Optional, Dict, Any
 from loguru import logger
 
 from .db_helper import StaffDatabase
-from ..models.staff_models import TaskStatus
+from models.staff_models import TaskStatus
 
 
 class TaskManager:
