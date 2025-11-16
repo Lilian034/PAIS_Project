@@ -943,8 +943,21 @@ function initDataMonitoring() {
     const section = document.querySelector('#exposure');
     if (!section) return;
 
-    // 載入訪客統計數據
-    loadVisitorStats();
+    // 記錄訪客計數（使用 sessionStorage 防止同一會話重複計數）
+    const SESSION_KEY = 'admin_visitor_counted';
+    if (!sessionStorage.getItem(SESSION_KEY)) {
+        incrementVisitor().then(result => {
+            if (result.success) {
+                sessionStorage.setItem(SESSION_KEY, 'true');
+                console.log('✅ 訪客計數已記錄:', result);
+                // 記錄後立即載入最新統計數據
+                loadVisitorStats();
+            }
+        });
+    } else {
+        // 如果已經計數過，只載入統計數據
+        loadVisitorStats();
+    }
 
     let listEl = section.querySelector('.url-list');
     if (!listEl) {

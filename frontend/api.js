@@ -248,3 +248,15 @@ async function getVisitorStats(month = null) {
         return { success: false, error: error.message };
     }
 }
+
+async function incrementVisitor() {
+    try {
+        const data = await apiRequest(`${API_BASE_URL}/visitor/increment`, {
+            method: 'POST'
+        });
+        return { success: true, ...data };
+    } catch (error) {
+        console.error('增加訪客計數失敗:', error.message);
+        return { success: false, error: error.message };
+    }
+}
