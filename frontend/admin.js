@@ -942,7 +942,10 @@ function initDataMonitoring() {
     const LS_KEY = 'exposureUrls';
     const section = document.querySelector('#exposure');
     if (!section) return;
-    
+
+    // 載入訪客統計數據
+    loadVisitorStats();
+
     let listEl = section.querySelector('.url-list');
     if (!listEl) {
         listEl = document.createElement('div');
@@ -1099,6 +1102,37 @@ function initDataMonitoring() {
 
 function refreshAnalytics() {
     // 模擬數據刷新
+}
+
+// ==================== 訪客統計 ====================
+async function loadVisitorStats() {
+    try {
+        const result = await getVisitorStats();
+        if (result.success) {
+            const visitorCountEl = document.getElementById('visitorCount');
+            const visitorMonthEl = document.getElementById('visitorMonth');
+            const monthlyVisitorCountEl = document.getElementById('monthlyVisitorCount');
+
+            if (visitorCountEl) {
+                visitorCountEl.textContent = result.count.toLocaleString('zh-TW');
+            }
+            if (monthlyVisitorCountEl) {
+                monthlyVisitorCountEl.textContent = result.count.toLocaleString('zh-TW');
+            }
+            if (visitorMonthEl) {
+                visitorMonthEl.textContent = result.month;
+            }
+            console.log('✅ 訪客統計已更新:', result);
+        } else {
+            console.warn('⚠️ 載入訪客統計失敗:', result.error);
+            const visitorCountEl = document.getElementById('visitorCount');
+            const monthlyVisitorCountEl = document.getElementById('monthlyVisitorCount');
+            if (visitorCountEl) visitorCountEl.textContent = '--';
+            if (monthlyVisitorCountEl) monthlyVisitorCountEl.textContent = '--';
+        }
+    } catch (error) {
+        console.error('❌ 載入訪客統計時發生錯誤:', error);
+    }
 }
 
 // ==================== 登出 ====================

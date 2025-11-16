@@ -236,3 +236,15 @@ async function staffHealthCheck() {
         return { status: 'error' };
     }
 }
+
+// ==================== 訪客計數器 API ====================
+
+async function getVisitorStats(month = null) {
+    try {
+        const url = month ? `${API_BASE_URL}/visitor/stats?month=${month}` : `${API_BASE_URL}/visitor/stats`;
+        const data = await apiRequest(url);
+        return { success: true, ...data };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+}
