@@ -1263,6 +1263,18 @@ async def get_visitor_stats(month: Optional[str] = None):
         raise HTTPException(status_code=500, detail=f"無法取得訪客統計: {str(e)}")
 
 
+@app.get("/api/visitor/total")
+async def get_total_visitors():
+    """取得總瀏覽數（所有月份累計）"""
+    try:
+        all_stats = db.get_all_visitor_stats(limit=999)  # 取得所有歷史記錄
+        total = sum(stat['count'] for stat in all_stats)
+        return {"total": total, "months_count": len(all_stats)}
+    except Exception as e:
+        logger.error(f"❌ 取得總瀏覽數時發生錯誤: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"無法取得總瀏覽數: {str(e)}")
+
+
 # --- 啟動與關閉事件保持不變 ---
 @app.on_event("startup")
 async def startup_event():

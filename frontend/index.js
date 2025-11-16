@@ -232,9 +232,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // 健康檢查
   checkBackendHealth();
 
-  // 初始化訪客計數器
-  initVisitorCounter();
-
   console.log('🎉 桃園市民政通 - AI 助手已就緒！');
   console.log('📡 API 端點:', API_BASE_URL);
   console.log('🆔 Session ID:', getSessionId());
@@ -249,60 +246,5 @@ async function checkBackendHealth() {
     console.log('✅ 後端健康狀態:', data);
   } catch (error) {
     console.warn('⚠️ 後端健康檢查失敗:', error);
-  }
-}
-
-// ==================== 訪客計數器 ====================
-
-async function initVisitorCounter() {
-  try {
-    // 檢查是否已經記錄過本次訪問（使用 sessionStorage，關閉瀏覽器後清除）
-    const hasVisited = sessionStorage.getItem('pais_visited');
-
-    if (!hasVisited) {
-      // 第一次訪問，增加計數
-      const response = await fetch(`${API_BASE_URL}/visitor/increment`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        updateVisitorDisplay(data.count);
-        sessionStorage.setItem('pais_visited', 'true');
-        console.log('👥 訪客計數已更新:', data.count);
-      } else {
-        throw new Error('增加訪客計數失敗');
-      }
-    } else {
-      // 已經訪問過，只獲取當前計數
-      const response = await fetch(`${API_BASE_URL}/visitor/stats`);
-
-      if (response.ok) {
-        const data = await response.json();
-        updateVisitorDisplay(data.count);
-        console.log('👥 訪客計數:', data.count);
-      } else {
-        throw new Error('獲取訪客統計失敗');
-      }
-    }
-  } catch (error) {
-    console.warn('⚠️ 訪客計數器初始化失敗:', error);
-    // 失敗時顯示 "--"
-    updateVisitorDisplay('--');
-  }
-}
-
-function updateVisitorDisplay(count) {
-  const visitorCountElement = document.getElementById('visitorCount');
-  if (visitorCountElement) {
-    // 如果是數字，格式化顯示（加千分位）
-    if (typeof count === 'number') {
-      visitorCountElement.textContent = count.toLocaleString('zh-TW');
-    } else {
-      visitorCountElement.textContent = count;
-    }
   }
 }

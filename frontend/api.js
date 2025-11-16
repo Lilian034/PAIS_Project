@@ -260,3 +260,12 @@ async function incrementVisitor() {
         return { success: false, error: error.message };
     }
 }
+
+async function getTotalVisitors() {
+    try {
+        const data = await apiRequest(`${API_BASE_URL}/visitor/total`);
+        return { success: true, ...data };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+}
