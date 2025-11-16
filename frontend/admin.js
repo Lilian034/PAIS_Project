@@ -595,8 +595,7 @@ function clearProofreadChat() {
     if (messagesContainer) {
         messagesContainer.innerHTML = `
             <div class="pr-message pr-ai">
-                <div class="pr-avatar pr-ai-avatar">
-                    <img src="./proofreading.png" alt="校稿助理" onerror="this.style.display='none';this.closest('.pr-ai-avatar').classList.add('fallback');">
+                <div class="pr-avatar pr-ai-avatar fallback">
                     <span class="fallback-text">校</span>
                 </div>
                 <div class="pr-bubble">您好～我在這裡幫你校正文稿、逐字稿。請直接貼上文字。</div>
@@ -626,8 +625,7 @@ async function sendProofreadRequest(userMessage) {
     const loadingDiv = document.createElement('div');
     loadingDiv.className = 'pr-message pr-ai';
     loadingDiv.innerHTML = `
-        <div class="pr-avatar pr-ai-avatar">
-            <img src="./proofreading.png" alt="校稿助理" onerror="this.style.display='none';this.closest('.pr-ai-avatar').classList.add('fallback');">
+        <div class="pr-avatar pr-ai-avatar fallback">
             <span class="fallback-text">校</span>
         </div>
         <div class="pr-bubble">正在校對中...</div>
@@ -666,8 +664,7 @@ async function sendProofreadRequest(userMessage) {
             const messageDiv = document.createElement('div');
             messageDiv.className = 'pr-message pr-ai';
             messageDiv.innerHTML = `
-                <div class="pr-avatar pr-ai-avatar">
-                    <img src="./proofreading.png" alt="校稿助理" onerror="this.style.display='none';this.closest('.pr-ai-avatar').classList.add('fallback');">
+                <div class="pr-avatar pr-ai-avatar fallback">
                     <span class="fallback-text">校</span>
                 </div>
                 <div class="pr-bubble">
@@ -681,8 +678,7 @@ async function sendProofreadRequest(userMessage) {
             const errorDiv = document.createElement('div');
             errorDiv.className = 'pr-message pr-ai';
             errorDiv.innerHTML = `
-                <div class="pr-avatar pr-ai-avatar">
-                    <img src="./proofreading.png" alt="校稿助理" onerror="this.style.display='none';this.closest('.pr-ai-avatar').classList.add('fallback');">
+                <div class="pr-avatar pr-ai-avatar fallback">
                     <span class="fallback-text">校</span>
                 </div>
                 <div class="pr-bubble">抱歉，校對過程中發生錯誤：${escapeHtml(result.error)}</div>
@@ -697,8 +693,7 @@ async function sendProofreadRequest(userMessage) {
         const errorDiv = document.createElement('div');
         errorDiv.className = 'pr-message pr-ai';
         errorDiv.innerHTML = `
-            <div class="pr-avatar pr-ai-avatar">
-                <img src="./proofreading.png" alt="校稿助理" onerror="this.style.display='none';this.closest('.pr-ai-avatar').classList.add('fallback');">
+            <div class="pr-avatar pr-ai-avatar fallback">
                 <span class="fallback-text">校</span>
             </div>
             <div class="pr-bubble">抱歉，校對過程中發生未預期錯誤</div>
