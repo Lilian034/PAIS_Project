@@ -232,6 +232,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // 健康檢查
   checkBackendHealth();
 
+  // 記錄民眾系統訪客
+  recordPublicVisitor();
+
   console.log('🎉 桃園市民政通 - AI 助手已就緒！');
   console.log('📡 API 端點:', API_BASE_URL);
   console.log('🆔 Session ID:', getSessionId());
@@ -246,5 +249,29 @@ async function checkBackendHealth() {
     console.log('✅ 後端健康狀態:', data);
   } catch (error) {
     console.warn('⚠️ 後端健康檢查失敗:', error);
+  }
+}
+
+// ==================== 訪客計數 ====================
+
+async function recordPublicVisitor() {
+  try {
+    // 使用 sessionStorage 防止同一會話重複計數
+    const SESSION_KEY = 'public_visitor_counted';
+
+    if (!sessionStorage.getItem(SESSION_KEY)) {
+      const response = await fetch(`${API_BASE_URL}/visitor/increment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        sessionStorage.setItem(SESSION_KEY, 'true');
+        console.log('✅ 民眾系統訪客已記錄:', data.count);
+      }
+    }
+  } catch (error) {
+    console.warn('⚠️ 訪客計數失敗:', error);
   }
 }
