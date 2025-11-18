@@ -4,6 +4,7 @@
 const ADMIN_API_BASE_URL = '/api';
 const STAFF_API_URL = '/api/staff';
 let ADMIN_STAFF_PASSWORD = 'admin123';
+const ADMIN_PASSWORD = 'admin123456';  // 用於知識庫管理
 
 function setStaffPassword(password) {
     ADMIN_STAFF_PASSWORD = password;
@@ -17,11 +18,12 @@ function getStaffPassword() {
 // ==================== 統一 HTTP 請求處理 ====================
 
 async function adminApiRequest(url, options = {}) {
-    const { method = 'GET', body, requireAuth = false, contentType = 'application/json' } = options;
+    const { method = 'GET', body, requireAuth = false, requireAdminAuth = false, contentType = 'application/json' } = options;
 
     const headers = {};
     if (contentType) headers['Content-Type'] = contentType;
-    if (requireAuth) headers['Authorization'] = `Bearer ${getStaffPassword()}`;
+    if (requireAdminAuth) headers['Authorization'] = `Bearer ${ADMIN_PASSWORD}`;
+    else if (requireAuth) headers['Authorization'] = `Bearer ${getStaffPassword()}`;
 
     try {
         const fetchOptions = { method, headers };
@@ -162,7 +164,7 @@ async function uploadFile(file, folder = '') {
         const data = await adminApiRequest(`${ADMIN_API_BASE_URL}/upload`, {
             method: 'POST',
             body: formData,
-            requireAuth: true
+            requireAdminAuth: true
         });
 
         if (data.error) {
@@ -189,7 +191,7 @@ async function ingestDocuments(folderPath = "documents") {
 
 async function listDocuments() {
     try {
-        const data = await adminApiRequest(`${ADMIN_API_BASE_URL}/documents`, { requireAuth: true });
+        const data = await adminApiRequest(`${ADMIN_API_BASE_URL}/documents`, { requireAdminAuth: true });
         return { success: true, documents: data.documents || [], total: data.total || 0 };
     } catch (error) {
         return { success: false, error: error.message, documents: [], total: 0 };
@@ -200,7 +202,7 @@ async function deleteDocument(filePath) {
     try {
         const data = await adminApiRequest(`${ADMIN_API_BASE_URL}/documents/${encodeURIComponent(filePath)}`, {
             method: 'DELETE',
-            requireAuth: true
+            requireAdminAuth: true
         });
         return { success: true, ...data };
     } catch (error) {
@@ -260,8 +262,8 @@ async function incrementVisitor() {
 
 async function getTotalVisitors() {
     try {
-        const data = await adminApiRequest(`${ADMIN_API_BASE_URL}/visitor/total`);
-        return { success: true, ...data };
+        const data = await adminApiRequest(`${ADMIN_API_BASE_URL}/visitor/stats`);
+        return { success: true, total: data.total || 0, ...data };
     } catch (error) {
         return { success: false, error: error.message };
     }
