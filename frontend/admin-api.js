@@ -181,7 +181,7 @@ async function ingestDocuments(folderPath = "documents") {
         const data = await adminApiRequest(`${ADMIN_API_BASE_URL}/ingest`, {
             method: 'POST',
             body: { folder_path: folderPath },
-            requireAuth: true
+            requireAdminAuth: true
         });
         return { success: true, ...data };
     } catch (error) {
