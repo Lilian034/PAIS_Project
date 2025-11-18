@@ -465,33 +465,89 @@ function initMediaUpload() {
     }
 }
 
-function handlePhotoUpload(files) {
+let uploadedPhotoPaths = []; // 保存已上傳的照片路徑
+
+async function handlePhotoUpload(files) {
     const photoGrid = document.querySelector('.photo-grid');
     const addPhotoBtn = photoGrid?.querySelector('.add-photo');
     if (!photoGrid || !addPhotoBtn) return;
-    
-    Array.from(files).forEach(file => {
-        if (photoGrid.children.length < 6) {
+
+    showNotification('📤 正在上傳照片...', 'info');
+
+    for (const file of Array.from(files)) {
+        if (photoGrid.children.length >= 6) {
+            showNotification('⚠️ 最多只能上傳5張照片', 'warning');
+            break;
+        }
+
+        try {
+            // 上傳照片到服務器（使用 images 資料夾）
+            const uploadResult = await uploadFile(file, 'images');
+
+            if (!uploadResult.success) {
+                showNotification(`❌ 上傳 ${file.name} 失敗: ${uploadResult.error}`, 'error');
+                continue;
+            }
+
+            // 保存上傳的照片路徑
+            const photoPath = uploadResult.file_path || `documents/images/${file.name}`;
+            uploadedPhotoPaths.push(photoPath);
+
+            // 在前端顯示照片
             const photoItem = document.createElement('div');
             photoItem.className = 'photo-item';
-            
+            photoItem.dataset.path = photoPath;
+
             const img = document.createElement('img');
             img.style.width = '100%';
             img.style.height = '100%';
             img.style.objectFit = 'cover';
-            
+
             const reader = new FileReader();
             reader.onload = (e) => {
                 img.src = e.target.result;
             };
             reader.readAsDataURL(file);
-            
+
             photoItem.appendChild(img);
+
+            // 添加刪除按鈕
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'photo-delete-btn';
+            deleteBtn.innerHTML = '✕';
+            deleteBtn.style.cssText = `
+                position: absolute;
+                top: 5px;
+                right: 5px;
+                background: rgba(239, 68, 68, 0.9);
+                color: white;
+                border: none;
+                border-radius: 50%;
+                width: 24px;
+                height: 24px;
+                cursor: pointer;
+                font-size: 14px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            `;
+            deleteBtn.onclick = () => {
+                photoItem.remove();
+                uploadedPhotoPaths = uploadedPhotoPaths.filter(p => p !== photoPath);
+            };
+
+            photoItem.style.position = 'relative';
+            photoItem.appendChild(deleteBtn);
+
             photoGrid.insertBefore(photoItem, addPhotoBtn);
+
+        } catch (error) {
+            console.error('上傳照片錯誤:', error);
+            showNotification(`❌ 上傳 ${file.name} 失敗`, 'error');
         }
-    });
-    
-    showNotification('照片上傳成功！', 'success');
+    }
+
+    showNotification('✅ 照片上傳完成！', 'success');
 }
 
 function handleAudioUpload(files) {
@@ -818,12 +874,23 @@ function saveDraftTxt() {
 }
 
 // ==================== 語音生成 ====================
+let currentVoiceTaskId = null; // 保存當前語音任務ID
+let generatedAudioUrl = null; // 保存生成的音頻URL
+
 function initVoiceGeneration() {
+    const generateBtn = document.getElementById('btnGoGenerate');
     const saveBtn = document.getElementById('btnSaveAudio');
+
+    // 綁定生成按鈕
+    if (generateBtn) {
+        generateBtn.addEventListener('click', handleVoiceGenerate);
+    }
+
+    // 綁定保存按鈕
     if (saveBtn) {
         saveBtn.addEventListener('click', saveAudioFile);
     }
-    
+
     const voiceOptions = document.querySelectorAll('.voice-option');
     voiceOptions.forEach(option => {
         option.addEventListener('click', () => {
@@ -831,15 +898,109 @@ function initVoiceGeneration() {
             option.classList.add('active');
         });
     });
-    
+
     // 綁定「＋新增音檔」按鈕
     const btnVoiceUpload = document.getElementById('btnVoiceUpload');
     if (btnVoiceUpload) {
         btnVoiceUpload.addEventListener('click', openAudioAddModal);
     }
-    
+
     // 初始化新增音檔彈窗
     initAudioAddModal();
+}
+
+/**
+ * 處理語音生成
+ */
+async function handleVoiceGenerate() {
+    const voicePrompt = document.getElementById('voicePrompt');
+    const text = voicePrompt?.value?.trim();
+
+    if (!text) {
+        showNotification('❌ 請輸入要生成語音的內容', 'warning');
+        return;
+    }
+
+    try {
+        showNotification('🎤 正在生成語音，請稍候...', 'info');
+
+        // 步驟 1: 先創建文案任務（因為語音生成需要 task_id）
+        const contentResult = await generateStaffContent(text, 'formal', 'short');
+
+        if (!contentResult.success) {
+            showNotification(`❌ 創建任務失敗: ${contentResult.error}`, 'error');
+            return;
+        }
+
+        const taskId = contentResult.task_id;
+        currentVoiceTaskId = taskId;
+
+        // 步驟 2: 審核通過任務（語音生成需要已審核的任務）
+        const approveResult = await approveTask(taskId);
+
+        if (!approveResult.success) {
+            showNotification(`❌ 審核任務失敗: ${approveResult.error}`, 'error');
+            return;
+        }
+
+        // 步驟 3: 生成語音
+        const voiceResult = await generateVoice(taskId);
+
+        if (!voiceResult.success) {
+            showNotification(`❌ 語音生成失敗: ${voiceResult.error}`, 'error');
+            return;
+        }
+
+        // 成功生成語音
+        const audioPath = voiceResult.file_path;
+        generatedAudioUrl = `/${audioPath}`; // 構建音頻URL
+
+        showNotification(`✅ 語音生成成功！任務ID: ${taskId}`, 'success');
+
+        // 顯示音頻播放器
+        displayAudioPlayer(generatedAudioUrl);
+
+    } catch (error) {
+        console.error('語音生成錯誤:', error);
+        showNotification(`❌ 語音生成過程中發生錯誤: ${error.message}`, 'error');
+    }
+}
+
+/**
+ * 顯示音頻播放器
+ */
+function displayAudioPlayer(audioUrl) {
+    const voiceSection = document.querySelector('#voice .voice-settings');
+
+    // 移除舊的播放器
+    const oldPlayer = voiceSection?.querySelector('.audio-player-container');
+    if (oldPlayer) {
+        oldPlayer.remove();
+    }
+
+    // 創建新的播放器
+    const playerDiv = document.createElement('div');
+    playerDiv.className = 'audio-player-container';
+    playerDiv.style.cssText = `
+        margin-top: 1rem;
+        padding: 1rem;
+        background: #f0f9ff;
+        border-radius: 8px;
+        border: 1px solid #bfdbfe;
+    `;
+
+    playerDiv.innerHTML = `
+        <h4 style="margin: 0 0 0.5rem 0; color: #0369a1;">🎵 生成的語音</h4>
+        <audio controls style="width: 100%; margin-top: 0.5rem;">
+            <source src="${audioUrl}" type="audio/mpeg">
+            您的瀏覽器不支援音頻播放。
+        </audio>
+        <p style="margin: 0.5rem 0 0 0; font-size: 0.875rem; color: #6b7280;">
+            任務ID: ${currentVoiceTaskId}
+        </p>
+    `;
+
+    voiceSection?.appendChild(playerDiv);
 }
 
 function initAudioAddModal() {
@@ -921,20 +1082,185 @@ function closeAudioAddModal() {
     if (addSource) addSource.value = '';
 }
 
+/**
+ * 保存音頻文件
+ */
 function saveAudioFile() {
-    showNotification('音檔已儲存', 'success');
+    if (!generatedAudioUrl) {
+        showNotification('❌ 請先生成語音', 'warning');
+        return;
+    }
+
+    try {
+        // 創建下載鏈接
+        const a = document.createElement('a');
+        a.href = generatedAudioUrl;
+        a.download = `voice_${currentVoiceTaskId || Date.now()}.mp3`;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        showNotification('✅ 音檔下載已開始', 'success');
+    } catch (error) {
+        console.error('保存音檔錯誤:', error);
+        showNotification(`❌ 保存音檔失敗: ${error.message}`, 'error');
+    }
 }
 
 // ==================== 短影音生成 ====================
+let currentVideoTaskId = null; // 保存當前影片任務ID
+let generatedVideoUrl = null; // 保存生成的影片URL
+
 function initVideoGeneration() {
+    const generateBtn = document.getElementById('btnGenVideo');
     const saveBtn = document.getElementById('btnSaveVideo');
+
+    // 綁定生成按鈕
+    if (generateBtn) {
+        generateBtn.addEventListener('click', handleVideoGenerate);
+    }
+
+    // 綁定保存按鈕
     if (saveBtn) {
         saveBtn.addEventListener('click', saveVideoFile);
     }
 }
 
+/**
+ * 處理影片生成
+ */
+async function handleVideoGenerate() {
+    // 檢查是否有上傳的照片
+    if (!uploadedPhotoPaths || uploadedPhotoPaths.length === 0) {
+        showNotification('❌ 請先上傳照片', 'warning');
+        return;
+    }
+
+    try {
+        showNotification('🎬 正在生成影片，這可能需要1-5分鐘，請耐心等候...', 'info');
+
+        // 使用第一張上傳的照片
+        const imagePath = uploadedPhotoPaths[0];
+
+        // 步驟 1: 如果沒有當前任務ID，創建一個臨時任務
+        let taskId = currentTaskId || currentVoiceTaskId;
+
+        if (!taskId) {
+            // 創建臨時任務
+            const tempText = '影片生成任務';
+            const contentResult = await generateStaffContent(tempText, 'formal', 'short');
+
+            if (!contentResult.success) {
+                showNotification(`❌ 創建任務失敗: ${contentResult.error}`, 'error');
+                return;
+            }
+
+            taskId = contentResult.task_id;
+        }
+
+        currentVideoTaskId = taskId;
+
+        // 步驟 2: 生成影片
+        const videoResult = await generateVideo(taskId, imagePath, '自然動態效果');
+
+        if (!videoResult.success) {
+            showNotification(`❌ 影片生成失敗: ${videoResult.error}`, 'error');
+            return;
+        }
+
+        // 成功生成影片
+        const videoPath = videoResult.file_path;
+        generatedVideoUrl = `/${videoPath}`; // 構建影片URL
+
+        showNotification(`✅ 影片生成成功！任務ID: ${taskId}`, 'success');
+
+        // 顯示影片預覽
+        displayVideoPlayer(generatedVideoUrl);
+
+    } catch (error) {
+        console.error('影片生成錯誤:', error);
+        showNotification(`❌ 影片生成過程中發生錯誤: ${error.message}`, 'error');
+    }
+}
+
+/**
+ * 顯示影片播放器
+ */
+function displayVideoPlayer(videoUrl) {
+    const avatarPreview = document.querySelector('.generated-avatar');
+
+    if (!avatarPreview) return;
+
+    // 清空原有內容
+    avatarPreview.innerHTML = '';
+
+    // 創建影片元素
+    const video = document.createElement('video');
+    video.controls = true;
+    video.autoplay = false;
+    video.style.cssText = `
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        background: #000;
+    `;
+
+    const source = document.createElement('source');
+    source.src = videoUrl;
+    source.type = 'video/mp4';
+
+    video.appendChild(source);
+    avatarPreview.appendChild(video);
+
+    // 添加任務ID提示
+    const taskInfo = document.createElement('p');
+    taskInfo.style.cssText = `
+        margin-top: 0.5rem;
+        font-size: 0.875rem;
+        color: #6b7280;
+        text-align: center;
+    `;
+    taskInfo.textContent = `任務ID: ${currentVideoTaskId}`;
+
+    const mediaCard = avatarPreview.closest('.media-card');
+    if (mediaCard) {
+        const existingInfo = mediaCard.querySelector('.video-task-info');
+        if (existingInfo) {
+            existingInfo.remove();
+        }
+        taskInfo.className = 'video-task-info';
+        const previewDiv = mediaCard.querySelector('.media-preview');
+        if (previewDiv) {
+            previewDiv.appendChild(taskInfo);
+        }
+    }
+}
+
+/**
+ * 保存影片文件
+ */
 function saveVideoFile() {
-    showNotification('影片已儲存', 'success');
+    if (!generatedVideoUrl) {
+        showNotification('❌ 請先生成影片', 'warning');
+        return;
+    }
+
+    try {
+        // 創建下載鏈接
+        const a = document.createElement('a');
+        a.href = generatedVideoUrl;
+        a.download = `video_${currentVideoTaskId || Date.now()}.mp4`;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        showNotification('✅ 影片下載已開始', 'success');
+    } catch (error) {
+        console.error('保存影片錯誤:', error);
+        showNotification(`❌ 保存影片失敗: ${error.message}`, 'error');
+    }
 }
 
 // ==================== 數據監控 ====================
