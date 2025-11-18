@@ -1,8 +1,3 @@
-"""
-PAIS 幕僚系統 API
-遵循 KISS、YAGNI、SOLID 原則
-專注於文案生成工作流程：生成 → 審核 → 語音 → 影片
-"""
 import os
 from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware

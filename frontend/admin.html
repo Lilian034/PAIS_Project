@@ -108,8 +108,7 @@
                 <div class="pr-chat-panel">
                     <div class="pr-chat-header" style="display: flex; justify-content: space-between; align-items: center;">
                         <div class="pr-chat-title">
-                            <div class="pr-ai-avatar">
-                                <img src="./proofreading.png" alt="校稿助理" onerror="this.style.display='none';this.closest('.pr-ai-avatar').classList.add('fallback');">
+                            <div class="pr-ai-avatar fallback">
                                 <span class="fallback-text">校</span>
                             </div>
                             <div>
@@ -124,8 +123,7 @@
 
                     <div class="pr-chat-messages" id="pr-chatMessages">
                         <div class="pr-message pr-ai">
-                            <div class="pr-avatar pr-ai-avatar">
-                                <img src="./proofreading.png" alt="校稿助理" onerror="this.style.display='none';this.closest('.pr-ai-avatar').classList.add('fallback');">
+                            <div class="pr-avatar pr-ai-avatar fallback">
                                 <span class="fallback-text">校</span>
                             </div>
                             <div class="pr-bubble">您好～我在這裡幫你校正文稿、逐字稿。請直接貼上文字。</div>
@@ -303,9 +301,27 @@
                 </div>
 
                 <div class="exposure-summary">
-                    <div class="exposure-card"><div class="exposure-icon">👁️</div><div class="exposure-data"><h3>125,678</h3><p>總瀏覽數</p></div><div class="exposure-trend">+15.3%</div></div>
-                    <div class="exposure-card"><div class="exposure-icon">🌐</div><div class="exposure-data"><h3>12</h3><p>活躍網址</p></div></div>
-                    <div class="exposure-card"><div class="exposure-icon">📱</div><div class="exposure-data"><h3>8,456</h3><p>今日瀏覽</p></div><div class="exposure-trend">+8.2%</div></div>
+                    <div class="exposure-card">
+                        <div class="exposure-icon">👁️</div>
+                        <div class="exposure-data">
+                            <h3 id="totalVisitorCount">--</h3>
+                            <p>總瀏覽</p>
+                        </div>
+                    </div>
+                    <div class="exposure-card">
+                        <div class="exposure-icon">🌐</div>
+                        <div class="exposure-data">
+                            <h3 id="activeUrlCount">--</h3>
+                            <p>活躍網址</p>
+                        </div>
+                    </div>
+                    <div class="exposure-card">
+                        <div class="exposure-icon">📱</div>
+                        <div class="exposure-data">
+                            <h3 id="monthlyVisitorCount">--</h3>
+                            <p>本月瀏覽</p>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="url-manager">
@@ -314,21 +330,6 @@
                         <button class="add-url-btn" onclick="showAddUrlModal()">+ 新增網址</button>
                     </div>
                     <div class="url-list">
-                        <div class="url-item">
-                            <div class="url-info">
-                                <span class="url-icon">🌐</span>
-                                <div class="url-details">
-                                    <h4>桃園市政宣傳網</h4>
-                                    <a href="https://www.tyco.gov.tw/cp.aspx?n=14862" class="url-link" target="_blank" rel="noopener">https://www.tyco.gov.tw/cp.aspx?n=14862</a>
-                                </div>
-                            </div>
-                            <div class="url-stats">
-                                <span class="stat-label">瀏覽人數: 1122</span>
-                            </div>
-                            <div class="url-actions">
-                                <button class="btn-icon danger" title="刪除">刪除</button>
-                            </div>
-                        </div>
                     </div>
                 </div>
             </section>

@@ -238,8 +238,8 @@ async function staffHealthCheck() {
 
 async function getVisitorStats(month = null) {
     try {
-        const url = month ? `${ADMIN_API_BASE_URL}/visitor/stats?month=${month}` : `${ADMIN_API_BASE_URL}/visitor/stats`;
-        const data = await adminApiRequest(url);
+        const url = month ? `${API_BASE_URL}/visitor/stats?month=${month}` : `${API_BASE_URL}/visitor/stats`;
+        const data = await apiRequest(url);
         return { success: true, ...data };
     } catch (error) {
         return { success: false, error: error.message };
@@ -248,7 +248,7 @@ async function getVisitorStats(month = null) {
 
 async function incrementVisitor() {
     try {
-        const data = await adminApiRequest(`${ADMIN_API_BASE_URL}/visitor/increment`, {
+        const data = await apiRequest(`${API_BASE_URL}/visitor/increment`, {
             method: 'POST'
         });
         return { success: true, ...data };
@@ -260,7 +260,7 @@ async function incrementVisitor() {
 
 async function getTotalVisitors() {
     try {
-        const data = await adminApiRequest(`${ADMIN_API_BASE_URL}/visitor/total`);
+        const data = await apiRequest(`${API_BASE_URL}/visitor/total`);
         return { success: true, ...data };
     } catch (error) {
         return { success: false, error: error.message };

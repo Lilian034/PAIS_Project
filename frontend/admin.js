@@ -1268,7 +1268,23 @@ function initDataMonitoring() {
     const LS_KEY = 'exposureUrls';
     const section = document.querySelector('#exposure');
     if (!section) return;
-    
+
+    // 記錄訪客計數（使用 sessionStorage 防止同一會話重複計數）
+    const SESSION_KEY = 'admin_visitor_counted';
+    if (!sessionStorage.getItem(SESSION_KEY)) {
+        incrementVisitor().then(result => {
+            if (result.success) {
+                sessionStorage.setItem(SESSION_KEY, 'true');
+                console.log('✅ 訪客計數已記錄:', result);
+                // 記錄後立即載入最新統計數據
+                loadVisitorStats();
+            }
+        });
+    } else {
+        // 如果已經計數過，只載入統計數據
+        loadVisitorStats();
+    }
+
     let listEl = section.querySelector('.url-list');
     if (!listEl) {
         listEl = document.createElement('div');
@@ -1286,6 +1302,15 @@ function initDataMonitoring() {
     
     function save(data) {
         localStorage.setItem(LS_KEY, JSON.stringify(data));
+        // 更新活躍網址數
+        updateActiveUrlCount(data.length);
+    }
+
+    function updateActiveUrlCount(count) {
+        const activeUrlEl = document.getElementById('activeUrlCount');
+        if (activeUrlEl) {
+            activeUrlEl.textContent = count.toString();
+        }
     }
     
     function escapeHtml(text) {
@@ -1303,11 +1328,15 @@ function initDataMonitoring() {
     
     function render() {
         const data = load();
+
+        // 更新活躍網址數
+        updateActiveUrlCount(data.length);
+
         if (!data.length) {
             listEl.innerHTML = '<div class="empty-tip">目前沒有網址,請按右上角「新增網址」。</div>';
             return;
         }
-        
+
         listEl.innerHTML = data.map(it => `
             <div class="url-item" data-id="${it.id}">
                 <div class="url-info">
@@ -1425,6 +1454,47 @@ function initDataMonitoring() {
 
 function refreshAnalytics() {
     // 模擬數據刷新
+}
+
+// ==================== 訪客統計 ====================
+async function loadVisitorStats() {
+    // 載入總瀏覽數
+    try {
+        const totalResult = await getTotalVisitors();
+        const totalEl = document.getElementById('totalVisitorCount');
+        if (totalEl) {
+            if (totalResult.success) {
+                totalEl.textContent = totalResult.total.toLocaleString('zh-TW');
+                console.log('✅ 總瀏覽數已更新:', totalResult.total);
+            } else {
+                totalEl.textContent = '--';
+                console.warn('⚠️ 載入總瀏覽數失敗:', totalResult.error);
+            }
+        }
+    } catch (error) {
+        console.error('❌ 載入總瀏覽數時發生錯誤:', error);
+        const totalEl = document.getElementById('totalVisitorCount');
+        if (totalEl) totalEl.textContent = '--';
+    }
+
+    // 載入本月瀏覽數
+    try {
+        const monthlyResult = await getVisitorStats();
+        const monthlyEl = document.getElementById('monthlyVisitorCount');
+        if (monthlyEl) {
+            if (monthlyResult.success) {
+                monthlyEl.textContent = monthlyResult.count.toLocaleString('zh-TW');
+                console.log('✅ 本月瀏覽數已更新:', monthlyResult.count);
+            } else {
+                monthlyEl.textContent = '--';
+                console.warn('⚠️ 載入本月瀏覽數失敗:', monthlyResult.error);
+            }
+        }
+    } catch (error) {
+        console.error('❌ 載入本月瀏覽數時發生錯誤:', error);
+        const monthlyEl = document.getElementById('monthlyVisitorCount');
+        if (monthlyEl) monthlyEl.textContent = '--';
+    }
 }
 
 // ==================== 登出 ====================
