@@ -79,10 +79,10 @@ llm = GoogleGenerativeAI(
     max_output_tokens=2048
 )
 
-# Embeddings (使用 Google Generative AI Embeddings - 不需要下載模型)
-embeddings = GoogleGenerativeAIEmbeddings(
-    model="models/embedding-001",
-    google_api_key=GEMINI_API_KEY
+# Embeddings (使用 moka-ai/m3e-base)
+embeddings = HuggingFaceEmbeddings(
+    model_name="moka-ai/m3e-base",
+    model_kwargs={'device': 'cpu'}
 )
 
 # Qdrant 向量資料庫
