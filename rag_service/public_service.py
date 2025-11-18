@@ -947,7 +947,13 @@ async def ingest_documents(
             docs = load_document(str(file_path))
             if docs:
                 for doc in docs:
-                    relative_path = file_path.relative_to(Path.cwd())
+                    # 確保路徑正確解析
+                    try:
+                        absolute_path = file_path.resolve()
+                        relative_path = absolute_path.relative_to(Path.cwd().resolve())
+                    except ValueError:
+                        # 如果無法計算相對路徑，使用檔案路徑本身
+                        relative_path = file_path
                     doc.metadata["source"] = str(relative_path).replace("\\", "/")
                     doc.metadata["uploaded_at"] = datetime.now().isoformat()
                     doc.metadata["filename"] = file_path.name
