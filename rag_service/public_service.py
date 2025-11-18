@@ -12,7 +12,7 @@ from pydantic import BaseModel
 # ==================== LangChain 核心 ====================
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_google_genai import GoogleGenerativeAI, GoogleGenerativeAIEmbeddings
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import (
     PyPDFLoader, Docx2txtLoader, TextLoader
 )
