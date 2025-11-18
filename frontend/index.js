@@ -112,24 +112,8 @@ async function sendMessage() {
   }, 300);
 
   try {
-    // 呼叫 FastAPI 後端
-    const response = await fetch(`${API_BASE_URL}/chat`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        message: message,
-        session_id: getSessionId(),
-        use_agent: true  // 使用 LangChain Agent 模式
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const data = await response.json();
+    // 呼叫 FastAPI 後端（使用 public-api.js 中的函數）
+    const data = await sendChatMessage(message, getSessionId(), true);
     
     // 移除思考中訊息
     removeTyping();
@@ -244,8 +228,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function checkBackendHealth() {
   try {
-    const response = await fetch('/health');
-    const data = await response.json();
+    const data = await checkPublicHealth();
     console.log('✅ 後端健康狀態:', data);
   } catch (error) {
     console.warn('⚠️ 後端健康檢查失敗:', error);
@@ -260,33 +243,16 @@ async function initVisitorCounter() {
     const hasVisited = sessionStorage.getItem('pais_visited');
 
     if (!hasVisited) {
-      // 第一次訪問，增加計數
-      const response = await fetch(`${API_BASE_URL}/visitor/increment`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        updateVisitorDisplay(data.count);
-        sessionStorage.setItem('pais_visited', 'true');
-        console.log('👥 訪客計數已更新:', data.count);
-      } else {
-        throw new Error('增加訪客計數失敗');
-      }
+      // 第一次訪問，增加計數（使用 public-api.js 中的函數）
+      const data = await incrementVisitorCount();
+      updateVisitorDisplay(data.count);
+      sessionStorage.setItem('pais_visited', 'true');
+      console.log('👥 訪客計數已更新:', data.count);
     } else {
-      // 已經訪問過，只獲取當前計數
-      const response = await fetch(`${API_BASE_URL}/visitor/stats`);
-
-      if (response.ok) {
-        const data = await response.json();
-        updateVisitorDisplay(data.count);
-        console.log('👥 訪客計數:', data.count);
-      } else {
-        throw new Error('獲取訪客統計失敗');
-      }
+      // 已經訪問過，只獲取當前計數（使用 public-api.js 中的函數）
+      const data = await getVisitorStats();
+      updateVisitorDisplay(data.count);
+      console.log('👥 訪客計數:', data.count);
     }
   } catch (error) {
     console.warn('⚠️ 訪客計數器初始化失敗:', error);
