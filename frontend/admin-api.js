@@ -3,7 +3,7 @@
 
 const ADMIN_API_BASE_URL = '/api';
 const STAFF_API_URL = '/api/staff';
-let ADMIN_STAFF_PASSWORD = 'admin123456';
+let ADMIN_STAFF_PASSWORD = 'staff123456';
 
 function setStaffPassword(password) {
     ADMIN_STAFF_PASSWORD = password;
