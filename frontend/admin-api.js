@@ -263,7 +263,7 @@ async function incrementVisitor() {
 async function getTotalVisitors() {
     try {
         const data = await adminApiRequest(`${ADMIN_API_BASE_URL}/visitor/stats`);
-        return { success: true, total: data.total || 0, ...data };
+        return { success: true, total: data.count || 0, count: data.count || 0, ...data };
     } catch (error) {
         return { success: false, error: error.message };
     }
