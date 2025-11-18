@@ -363,19 +363,44 @@ async def get_media_status(
         task = task_mgr.get_task(task_id)
         if not task:
             raise HTTPException(status_code=404, detail="任務不存在")
-        
+
         media_records = db.get_media_records(task_id)
-        
+
         return {
             "success": True,
             "task_status": task['status'],
             "media_records": media_records
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"❌ 查詢狀態失敗: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== 學習與記憶管理 ====================
+
+@app.get("/api/staff/learning/summary/{task_id}")
+async def get_learning_summary(
+    task_id: str,
+    authorized: bool = Depends(verify_password)
+):
+    """
+    查看任務的學習摘要
+
+    返回該任務中 AI 學到了什麼
+    """
+    try:
+        summary = memory_mgr.get_learning_summary(task_id)
+
+        return {
+            "success": True,
+            **summary
+        }
+
+    except Exception as e:
+        logger.error(f"❌ 獲取學習摘要失敗: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
