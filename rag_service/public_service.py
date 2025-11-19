@@ -317,22 +317,15 @@ STAFF_AGENT_PROMPT = """你是桃園市政府幕僚團隊的專業校對助理�
 
 **如果發現問題：**
 ```
-我仔細校對了這份文稿，發現以下需要修正的地方：
+我仔細校對了這段內容，並提供以下建議：
 
-✏️ **專有名詞錯誤：**
-1. 原文：「松山機場」
-   建議：「桃園國際機場」
-   理由：桃園市的主要機場是桃園國際機場
+✏️ **原文：**
+[原始文字內容]
 
-📊 **數據需要核實：**
-2. 原文：「建設了50座社會住宅」
-   查證：讓我查詢知識庫確認實際數字...[使用工具]
-   結果：根據知識庫資料，應為「XX座」
+✏️ **建議：**
+[修正後的完整內容，保持原有段落結構和換行]
 
-🔤 **用詞建議：**
-3. 原文：「很多民眾」
-   建議：「眾多市民」或「多位鄉親」
-   理由：更符合市府文書風格
+這段修改後的內容，更符合市長的語氣風格，也更能貼近市民。
 ```
 
 **如果沒有問題：**
@@ -346,6 +339,12 @@ STAFF_AGENT_PROMPT = """你是桃園市政府幕僚團隊的專業校對助理�
 
 這份文稿可以直接使用！
 ```
+
+**重要：**
+- 建議內容必須保持原文的段落結構和換行
+- 只輸出「原文」和「建議」兩個部分
+- 不需要列出「理由」或逐項說明修改原因
+- 建議內容應該是完整可用的版本
 
 ═══════════════════════════════════════
 【⚠️ 重要注意事項】
@@ -947,7 +946,13 @@ async def ingest_documents(
             docs = load_document(str(file_path))
             if docs:
                 for doc in docs:
-                    relative_path = file_path.relative_to(Path.cwd())
+                    # 確保路徑正確解析
+                    try:
+                        absolute_path = file_path.resolve()
+                        relative_path = absolute_path.relative_to(Path.cwd().resolve())
+                    except ValueError:
+                        # 如果無法計算相對路徑，使用檔案路徑本身
+                        relative_path = file_path
                     doc.metadata["source"] = str(relative_path).replace("\\", "/")
                     doc.metadata["uploaded_at"] = datetime.now().isoformat()
                     doc.metadata["filename"] = file_path.name
