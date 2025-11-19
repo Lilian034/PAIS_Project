@@ -491,6 +491,7 @@ body {
     padding: 12px 16px;
     border-radius: 12px;
     line-height: 1.5;
+    white-space: pre-line;  /* 保持換行符，使文字能夠正確換行 */
 }
 
 .pr-message.pr-ai .pr-bubble {
