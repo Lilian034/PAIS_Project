@@ -162,7 +162,7 @@
                             <label>生成指令</label>
                             <textarea id="genPrompt" class="form-control" rows="4" placeholder="例如:需要一篇臉書文案,宣傳市長去花蓮鏟土,邀請民眾一起盡一份心力"></textarea>
                         </div>
-                        <button class="generate-btn" onclick="generateContent()">
+                        <button class="generate-btn" onclick="window.contentGenerator.generate()">
                             <span>✨</span> 生成內容
                         </button>
                     </div>
@@ -178,8 +178,8 @@
                         </div>
                         
                         <div class="output-actions">
-                            <button class="action-btn" onclick="copyDraft()">複製文搞</button>
-                            <button class="action-save-btn" onclick="saveDraftTxt()">儲存檔案TXT</button>
+                            <button class="action-btn" onclick="window.contentGenerator.copy()">複製文搞</button>
+                            <button class="action-save-btn" onclick="window.contentGenerator.save()">儲存檔案TXT</button>
                         </div>
                     </div>
                 </div>
@@ -337,7 +337,7 @@
         </main>
     </div>
 
-    <script src="admin-api.js"></script>
-    <script src="admin.js"></script>
+    <!-- ES6 模組化腳本 -->
+    <script type="module" src="admin.js"></script>
 </body>
 </html>
