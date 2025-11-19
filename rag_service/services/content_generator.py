@@ -140,7 +140,7 @@ class ContentGenerator:
 請根據以上所有指引，生成符合要求的文案。**只輸出文案本身，不要有任何說明或備註**。
 
 文案內容：""",
-            input_variables=["topic", "style", "length", "context", "chat_history"]
+            input_variables=["topic", "style", "length", "context"]
         )
     
     async def generate(
