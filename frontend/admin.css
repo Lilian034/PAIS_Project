@@ -615,6 +615,7 @@ body {
     border: 1px solid var(--border);
     border-radius: 8px;
     background: #f8f9fa;
+    white-space: pre-line;  /* 保持換行符，使文案能夠正確換行 */
 }
 
 .placeholder-text {
