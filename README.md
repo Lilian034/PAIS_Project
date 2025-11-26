@@ -1,12 +1,12 @@
 # PAIS - 政務分身智能系統
 
 > 基於 LangChain + Gemini + Docker 的市長智能助理
-> 
+>
 > **功能：** 民眾問答 + 幕僚文案生成 + 知識庫管理
 
 ---
 
-## 📦 系統架構
+## 系統架構
 
 ```
 ┌─────────────────────────────────────────┐
@@ -35,69 +35,37 @@
 
 ---
 
-## 🌟 核心功能
+## 核心功能
 
-### 1️⃣ 民眾問答系統 (port 8000)
-- 🤖 AI 聊天機器人 (Agent + Memory)
-- 📚 RAG 知識庫問答
-- 💬 對話記憶功能
-- 🎯 語氣模仿
+### 民眾問答系統 (port 8000)
+- AI 聊天機器人 (Agent + Memory)
+- RAG 知識庫問答
+- 對話記憶功能
+- 語氣模仿
 
-### 2️⃣ 幕僚系統 (port 8001)
-- ✍️ **文案生成** (LLM + Memory + RAG)
+### 幕僚系統 (port 8001)
+- **文案生成** (LLM + Memory + RAG)
   - 自動從知識庫檢索資料
   - 學習市長用字遣詞
   - 持續優化生成品質
-  
-- ✏️ **文案審核**
+
+- **文案審核**
   - 人工修改與優化
   - 版本控制
   - 修改記錄作為學習樣本
 
-- 🎤 **語音克隆** (ElevenLabs)
+- **語音克隆** (ElevenLabs)
   - 文字轉語音
   - 克隆市長聲音
-  
-- 🎬 **影片生成** (Runway)
+
+- **影片生成** (Runway)
   - 圖片轉動態影片
 
-- 📚 **知識庫管理**
+- **知識庫管理**
   - 文件上傳
   - 自動向量化
 
 ---
-
-## 🚀 快速開始
-
-### 前置需求
-- Docker Desktop
-- docker-compose
-
-### 1. 設定環境變數
-
-複製 `.env.example` 為 `.env` 並填入 API Keys:
-
-```bash
-cp .env.example .env
-```
-
-編輯 `.env`:
-```bash
-# 必填
-GEMINI_API_KEY=your_gemini_api_key
-
-# 選填 (沒填對應功能無法使用)
-ELEVENLABS_API_KEY=your_elevenlabs_key  # 語音克隆
-MAYOR_VOICE_ID=your_voice_id             # 語音克隆
-RUNWAY_API_KEY=your_runway_key           # 影片生成
-```
-
-### 2. 一鍵部署
-
-```bash
-chmod +x setup.sh
-./setup.sh
-```
 
 ### 3. 訪問系統
 
@@ -111,103 +79,92 @@ chmod +x setup.sh
 
 ---
 
-## 🗂️ 專案結構
+## 專案結構
 
 ```
 PAIS_Project/
-├── frontend/                # 前端檔案
-│   ├── index.html          # 民眾聊天介面
-│   ├── admin.html          # 幕僚系統介面
-│   └── ...
-│
-├── rag_service/            # 後端服務
-│   ├── public_service.py   # 民眾問答 API (8000)
-│   ├── staff_service.py    # 幕僚系統 API (8001)
+├── frontend/                          # 前端檔案
+│   ├── index.html                    # 民眾聊天介面
+│   ├── index.css                     # 民眾系統樣式
+│   ├── index.js                      # 民眾系統腳本
 │   │
-│   ├── models/             # 資料模型
-│   ├── services/           # 業務邏輯
-│   │   ├── content_generator.py    # 文案生成
-│   │   ├── memory_manager.py       # 記憶管理
-│   │   ├── elevenlabs_service.py   # 語音服務
-│   │   └── runway_service.py       # 影片服務
+│   ├── admin.html                    # 幕僚系統介面
+│   ├── admin.css                     # 幕僚系統樣式
+│   ├── admin.js                      # 幕僚系統主入口
 │   │
-│   └── utils/              # 工具模組
-│       ├── db_helper.py            # 資料庫
-│       └── task_manager.py         # 任務管理
+│   ├── utils/                        # 工具模組
+│   │   ├── dom-helper.js            # DOM 操作工具
+│   │   └── notification.js          # 通知系統
+│   │
+│   ├── api/                          # API 客戶端
+│   │   └── api-client.js            # 統一 API 接口管理
+│   │
+│   └── modules/                      # 功能模組
+│       ├── tab-manager.js           # 標籤切換
+│       ├── document-manager.js      # 文件管理
+│       ├── proofreading.js          # 校稿對話
+│       ├── content-generator.js     # 內容生成
+│       ├── voice-generator.js       # 語音生成
+│       ├── video-generator.js       # 影片生成
+│       └── data-monitor.js          # 數據監控
 │
-├── documents/              # 📁 知識庫文件
+├── rag_service/                      # 後端服務
+│   ├── public_service.py            # 民眾問答 API (8000)
+│   ├── staff_service.py             # 幕僚系統 API (8001)
+│   │
+│   ├── prompts/                      # 提示詞模組
+│   │   ├── __init__.py
+│   │   ├── public_agent.py          # 民眾 Agent 提示詞
+│   │   └── staff_agent.py           # 幕僚 Agent 提示詞
+│   │
+│   ├── services/                     # 業務邏輯層
+│   │   ├── chat_service.py          # 聊天服務
+│   │   ├── content_generator.py     # 文案生成
+│   │   ├── memory_manager.py        # 記憶管理
+│   │   ├── elevenlabs_service.py    # 語音服務
+│   │   └── runway_service.py        # 影片服務
+│   │
+│   ├── utils/                        # 工具模組
+│   │   ├── error_handler.py         # 統一錯誤處理
+│   │   ├── db_helper.py             # 資料庫工具
+│   │   └── task_manager.py          # 任務管理
+│   │
+│   └── models/                       # 資料模型
+│       ├── chat_models.py
+│       ├── staff_models.py
+│       └── document_models.py
 │
-├── chat_history/           # 💬 對話記錄
-│   ├── public/            # 民眾對話
-│   └── staff/             # 幕僚記憶
+├── documents/                        # 知識庫文件
 │
-├── generated_content/      # ✍️ 生成內容
-│   ├── drafts/            # 草稿
-│   ├── approved/          # 已審核
-│   ├── voices/            # 語音檔
-│   └── videos/            # 影片檔
+├── chat_history/                     # 對話記錄
+│   ├── public/                      # 民眾對話
+│   └── staff/                       # 幕僚記憶
 │
-├── database/              # 🗄️ SQLite 資料庫
+├── generated_content/                # 生成內容
+│   ├── drafts/                      # 草稿
+│   ├── approved/                    # 已審核
+│   ├── voices/                      # 語音檔
+│   └── videos/                      # 影片檔
+│
+├── database/                         # SQLite 資料庫
 │   └── staff_system.db
 │
-├── logs/                  # 📊 系統日誌
-├── qdrant_storage/        # 🗄️ 向量資料庫
+├── logs/                             # 系統日誌
+├── qdrant_storage/                   # 向量資料庫
 │
-├── docker-compose.yml     # Docker 配置
-├── nginx.conf            # Nginx 配置
-├── .env                  # 環境變數
-└── setup.sh              # 快速部署腳本
+├── docker-compose.yml                # Docker 配置
+├── nginx.conf                        # Nginx 配置
+├── .env                              # 環境變數
+└── setup.sh                          # 快速部署腳本
 ```
 
 ---
 
-## 🔧 幕僚系統工作流程
-
-### 步驟 1: 文案生成
-```bash
-POST /api/staff/content/generate
-{
-  "topic": "市政建設成果",
-  "style": "casual",      # formal/casual/humorous
-  "length": "medium"      # short/medium/long
-}
-```
-
-### 步驟 2a: 人工修改
-```bash
-PUT /api/staff/content/task/{task_id}
-{
-  "content": "修改後的文案內容...",
-  "editor": "admin"
-}
-```
-
-### 步驟 2b: 審核通過
-```bash
-POST /api/staff/content/task/{task_id}/approve
-```
-
-### 步驟 3: 語音克隆
-```bash
-POST /api/staff/media/voice/{task_id}
-```
-
-### 步驟 4: 影片生成
-```bash
-POST /api/staff/media/video/{task_id}
-{
-  "image_path": "path/to/image.jpg",
-  "prompt": "自然動態效果"
-}
-```
-
----
-
-## 🧠 LangChain 架構說明
+## LangChain 架構說明
 
 ### 民眾問答系統
 ```
-Agent (ReAct) 
+Agent (ReAct)
   └─> Tools
        ├─> 搜尋知識庫 (RAG)
        ├─> 查詢政策
@@ -226,7 +183,7 @@ LLMChain (文案生成)
 
 ---
 
-## 🛠️ 常用指令
+## 常用指令
 
 ```bash
 # 啟動服務
@@ -256,41 +213,24 @@ curl http://localhost:8001/health    # 幕僚系統
 
 ---
 
-## 📊 資料庫說明
+## 資料庫說明
 
 ### Qdrant (向量資料庫)
 - 儲存知識庫文件向量
 - 兩系統共用
 - 支援語義搜尋
+- 使用 HuggingFace Embeddings
 
 ### SQLite (幕僚系統)
-- `content_tasks` - 文案任務
-- `content_versions` - 文案版本
-- `media_records` - 多媒體記錄
+| 資料表 | 說明 |
+|-------|------|
+| `content_tasks` | 文案任務主表 |
+| `content_versions` | 文案版本歷史 |
+| `media_records` | 多媒體生成記錄 |
 
 ---
 
-## 🔑 環境變數說明
-
-| 變數名稱 | 必填 | 說明 |
-|---------|------|------|
-| GEMINI_API_KEY | ✅ | Google Gemini API Key |
-| QDRANT_HOST | ✅ | Qdrant 主機 (預設: qdrant) |
-| QDRANT_PORT | ✅ | Qdrant 埠號 (預設: 6333) |
-| ADMIN_PASSWORD | ✅ | 管理員密碼 |
-| STAFF_PASSWORD | ✅ | 幕僚系統密碼 |
-| ELEVENLABS_API_KEY | ❌ | ElevenLabs API Key |
-| MAYOR_VOICE_ID | ❌ | 市長語音 ID |
-| RUNWAY_API_KEY | ❌ | Runway API Key |
-
----
-
-## ⚠️ 注意事項
-
-### API Keys
-- ElevenLabs 和 Runway 需要付費訂閱
-- 沒設定的話對應功能無法使用
-- 測試時可以先不填，跳過語音/影片生成
+## 注意事項
 
 ### 記憶管理
 - 記憶檔案會持續增長
@@ -308,57 +248,11 @@ curl http://localhost:8001/health    # 幕僚系統
 - 語音生成時間約 10-30 秒
 - 影片生成時間約 1-5 分鐘
 
----
-
-## 🐛 問題排查
-
-### 容器啟動失敗
-```bash
-# 查看日誌
-docker-compose logs
-
-# 重新建置
-docker-compose down
-docker-compose up -d --build
-```
-
-### API 無法連線
-```bash
-# 檢查服務狀態
-docker-compose ps
-
-# 檢查網路
-docker network ls
-```
-
-### 知識庫檢索失敗
-```bash
-# 確認 Qdrant 正常運行
-curl http://localhost:6333/dashboard
-
-# 重新建立索引
-docker exec -it pais-public-api python -c "from main import *; ingest_documents('documents')"
-```
+### 模組導入
+- 前端使用 ES6 模組，需確保 `<script type="module">`
+- 舊版瀏覽器可能需要 polyfill
+- 開發時使用現代瀏覽器（Chrome, Firefox, Safari）
 
 ---
-
-## 📝 待開發功能
-
-- [ ] 前端介面優化
-- [ ] 批次文案生成
-- [ ] 定時任務排程
-- [ ] 更多語音選項
-- [ ] 影片樣式客製化
-- [ ] 數據分析面板
-
----
-
-## 👥 開發團隊
-
 PAIS 政務分身智能系統開發團隊
-
----
-
-## 📄 授權
-
 © 2024 PAIS Project. All rights reserved.

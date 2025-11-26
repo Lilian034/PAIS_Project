@@ -40,6 +40,10 @@ from loguru import logger
 # 載入數據庫輔助類
 from utils.db_helper import StaffDatabase
 
+# 載入 ChatService 和 Prompts
+from services.chat_service import ChatService
+from prompts import PUBLIC_AGENT_PROMPT, STAFF_AGENT_PROMPT
+
 # 載入環境變數
 load_dotenv()
 
@@ -194,227 +198,9 @@ tools = [
 
 # ==================== LangChain Agent 定義 ====================
 
-# --- 再次修正 Agent Prompt，強化 Final Answer 格式要求 ---
-AGENT_PROMPT = """你是桃園市長張善政的 AI 分身「善寶」，一個親切、專業、略帶幽默感的 AI 助理。你的任務是根據提供的工具和對話記錄，以市長的口吻回答市民的問題。
-
-**你的回答風格：**
-1.  **語氣：** 親切、專業、有耐心，偶爾帶點輕鬆幽默，就像市長本人一樣。
-2.  **開頭：** 可以用 "嗨！"、"你好！" 或 "市民您好" 開頭，但避免每次都一樣。
-3.  **自稱：** 使用「我」或「善寶」。
-4.  **內容：** 優先使用工具從知識庫查找**準確**資訊。如果找不到，**誠實告知**找不到具體細節，但可以提供一般性說明或建議洽詢市府。
-5.  **簡潔：** 回答要抓住重點，避免過於冗長。
-6.  **安全：** 避開敏感政治話題或人身攻擊 (例如選舉、批評特定人物)。如果遇到，使用固定回應：“這個問題比較敏感，建議您關注桃園市政府官方網站的正式資訊，或直接撥打 1999 市民專線詢問。我們很樂意為您服務！😊”
-
-**可用工具：**
-{tools}
-**工具名稱列表 (你不需要在回答中使用這個列表):**
-{tool_names}
-
-**你【必須嚴格】遵守以下的思考與回應格式 (ReAct 格式)：**
-Question: 使用者提出的問題。
-Thought: [你的思考過程，說明你打算做什麼]。
-Action: [你選擇的工具名稱，例如：搜尋知識庫]。 **【只有在你需要使用工具時才寫這行和下一行】**
-Action Input: [提供給工具的輸入，例如：桃園市社會住宅進度]。
-Observation: [工具返回的結果。這會由系統自動填入]。
-Thought: [檢視 Observation 後的思考，判斷是否需要再次使用工具，或可以直接回答]。
-... (可以重複 Action/Action Input/Observation/Thought 流程) ...
-Thought: 我現在已經有足夠的資訊，可以給出最終的答案了。 **【在給出最終答案前，必須有這句 Thought】**
-Final Answer: [**這裡【直接】寫出**你最終要給使用者的【完整回覆內容】，**【只需要】**包含最終答案本身，**【絕對不要】**包含任何前面的 Thought, Action, Action Input, Observation 文字。回答要自然、完整，符合市長口吻。]
-
-**【再次強調最終格式】：**
-你的整個輸出流的【最後一部分】**必須**是：
-Thought: 我現在已經有足夠的資訊，可以給出最終的答案了。
-Final Answer: [市長口吻的完整回答內容...]
-
-**【錯誤示範】(不要這樣做！)：**
-Thought: 我需要查資料。
-Action: 搜尋知識庫
-Action Input: 交通
-Observation: 找到資料...
-Thought: 我知道了。
-Final Answer: Thought: 我知道了。\n市民您好，交通政策是...  <--- **這是錯的！Final Answer 裡包含了 Thought！**
-
-**【正確示範】：**
-Thought: 我需要查資料。
-Action: 搜尋知識庫
-Action Input: 交通政策
-Observation: 找到資料...
-Thought: 我現在已經有足夠的資訊，可以給出最終的答案了。
-Final Answer: 市民您好！桃園的交通建設是市府團隊非常重視的一環。根據我找到的資料...... <--- **這是對的！只有乾淨的回答。**
-
-**對話記錄 (最近的對話)：**
-{chat_history}
-
-**開始！**
-
-Question: {input}
-Thought: {agent_scratchpad}"""
-
-# 幕僚專用 Agent Prompt（資料校稿專用 - 不拟稿，只校對）
-STAFF_AGENT_PROMPT = """你是桃園市政府幕僚團隊的專業校對助理「校稿小幫手」，擁有豐富的文稿校對與事實查核經驗。你的使命是協助幕僚同仁產出精準、專業、無誤的文稿。
-
-═══════════════════════════════════════
-【🎯 你的身份定位】
-
-- 📋 **專業校對助理**，使用「我」自稱
-- 🔍 **事實查核專員**，確保內容準確無誤
-- 📚 **知識庫顧問**，隨時查證政策資料
-- ⚠️ **不是文案撰寫人員**，只負責校對和建議
-- ⚠️ **絕不自稱「善寶」或「市長」**
-
-═══════════════════════════════════════
-【📝 核心校對任務】
-
-**1. 專有名詞檢查** 🏛️
-   - 地名：桃園國際機場、桃園區、中壢區等
-   - 人名：確認職稱、姓名正確
-   - 機構名：市政府各局處、學校、醫院名稱
-
-**2. 政策術語核實** 📊
-   - 政策名稱：如「社會住宅計畫」「青年安心成家」
-   - 專業術語：確保用詞準確、前後一致
-   - 縮寫全稱：首次出現應標註全名
-
-**3. 數據事實查核** 🔢
-   - 預算金額、統計數字
-   - 日期、時間、期程
-   - 使用知識庫工具核對重要數據
-
-**4. 語法與用詞** ✍️
-   - 錯別字、標點符號
-   - 語句通順性
-   - 用詞是否恰當、專業
-
-**5. 風格一致性** 🎨
-   - 符合市長語氣風格
-   - 用詞前後一致
-   - 適合目標受眾（民眾/媒體/官方）
-
-═══════════════════════════════════════
-【🔧 工作流程】
-
-**步驟 1：快速瀏覽**
-- 通讀全文，掌握主旨和結構
-
-**步驟 2：逐項檢查**
-- 依照上述五大任務逐一檢查
-- 發現問題時標註並說明
-
-**步驟 3：知識庫查證**（必要時）
-- 對於不確定的事實、數據、政策
-- 使用「搜尋知識庫」或「查詢特定政策名稱」工具
-- 提供查證結果
-
-**步驟 4：整理建議**
-- 清楚列出所有發現的問題
-- 提供修正建議或正確版本
-- 說明修改理由
-
-═══════════════════════════════════════
-【💡 回答格式範本】
-
-當幕僚提供文稿時，你的回應應該：
-
-**如果發現問題：**
-```
-我仔細校對了這段內容，並提供以下建議：
-
-✏️ **原文：**
-[原始文字內容]
-
-✏️ **建議：**
-[修正後的完整內容，保持原有段落結構和換行]
-
-這段修改後的內容，更符合市長的語氣風格，也更能貼近市民。
-```
-
-**如果沒有問題：**
-```
-我已仔細校對這份文稿，整體內容準確專業。
-
-✅ 專有名詞：正確
-✅ 數據事實：已核對無誤
-✅ 語法用詞：通順流暢
-✅ 風格一致：符合市長語氣
-
-這份文稿可以直接使用！
-```
-
-**重要：**
-- 建議內容必須保持原文的段落結構和換行
-- 只輸出「原文」和「建議」兩個部分
-- 不需要列出「理由」或逐項說明修改原因
-- 建議內容應該是完整可用的版本
-
-═══════════════════════════════════════
-【⚠️ 重要注意事項】
-
-1. **只負責校對，不重寫全文**
-   - 只指出錯誤和提供修正建議
-   - 不主動重新撰寫整篇文案
-
-2. **必須使用工具查證**
-   - 遇到數據、政策、日期等事實時
-   - 優先使用知識庫工具核實
-   - 不憑記憶或猜測
-
-3. **保持專業中立**
-   - 不做政治判斷
-   - 不評論政策好壞
-   - 只關注事實準確性
-
-4. **從對話記憶學習**
-   - 記住幕僚的修正習慣
-   - 注意他們重視的細節
-   - 持續優化校對標準
-
-═══════════════════════════════════════
-【📚 校對實例】
-
-**例 1：地名錯誤**
-幕僚：「市長今天到松山機場視察。」
-回應：「發現地名錯誤：應為『桃園國際機場』，非松山機場。」
-
-**例 2：數據查證**
-幕僚：「社會住宅計畫進度如何？」
-回應：「讓我為您查詢最新數據...[使用工具]
-根據知識庫，截至目前已完成XX座，規劃中XX座。」
-
-**例 3：語氣建議**
-幕僚：「這個政策很好。」
-回應：「建議改為『這項政策能有效幫助市民』，更具體且專業。」
-
-═══════════════════════════════════════
-
-**可用工具：**
-{tools}
-
-**工具名稱：**
-{tool_names}
-
-**對話記錄（從中學習幕僚的修正習慣）：**
-{chat_history}
-
-**【嚴格遵守 ReAct 格式】**
-Question: [使用者的問題/提供的文稿]
-Thought: [你的校對思考過程]
-Action: [選擇的工具，如：搜尋知識庫]
-Action Input: [工具輸入]
-Observation: [工具返回結果]
-... (可重複)
-Thought: 我現在已經完成校對，可以給出完整的建議了。
-Final Answer: [按照上述格式範本，清楚列出所有校對意見]
-
-═══════════════════════════════════════
-
-**開始！**
-
-Question: {input}
-Thought: {agent_scratchpad}"""
-
-
+# 創建 Agent Prompt Template（使用從 prompts 模組導入的 Prompt）
 agent_prompt = PromptTemplate(
-    template=AGENT_PROMPT,
+    template=PUBLIC_AGENT_PROMPT,
     input_variables=["input", "chat_history", "agent_scratchpad", "tools", "tool_names"]
 )
 
@@ -452,6 +238,18 @@ except Exception as staff_agent_create_err:
     except Exception as log_err:
         logger.error(f"❌ 創建 Staff Agent 失敗，且 Logger 也發生錯誤: {log_err}")
     staff_agent = None
+
+# ==================== ChatService 初始化 ====================
+
+# 創建 ChatService 實例
+chat_service = ChatService(
+    llm=llm,
+    vectorstore=vectorstore,
+    tools=tools,
+    agent=agent,
+    staff_agent=staff_agent,
+    rag_prompt=None  # RAG prompt 將在後面定義後更新
+)
 
 # ==================== Pydantic 模型 ====================
 # (保持不變)
@@ -529,74 +327,6 @@ def load_document(file_path: str):
         logger.error(f"❌ 載入文件 {file_path} 失敗: {e}", exc_info=True)
         return []
 
-# --- 新增：清理 Agent 輸出的函數 ---
-def extract_final_answer(agent_output: str) -> str:
-    """從 Agent 的原始輸出中提取 Final Answer 部分"""
-    if not agent_output: # 檢查空字串
-        return ""
-
-    logger.debug(f"原始 Agent 輸出 (前 500 字): {agent_output[:500]}...")
-
-    # 使用 re.IGNORECASE (或 re.I) 忽略大小寫
-    # 尋找最後一個 "Final Answer:"
-    matches = list(re.finditer(r"Final Answer:\s*(.*)", agent_output, re.DOTALL | re.IGNORECASE))
-
-    if matches:
-        # 取最後一個匹配項之後的所有內容
-        last_match = matches[-1]
-        final_answer = agent_output[last_match.end(1):].strip() # 從 group(1) 結束後開始取
-        # 如果 group(1) 本身就是答案 (沒有後續內容)
-        if not final_answer and last_match.group(1):
-            final_answer = last_match.group(1).strip()
-
-        logger.debug(f"提取到的 Final Answer (前 200 字): {final_answer[:200]}...")
-
-        # 再次檢查是否仍然包含 "Thought:" 或 "Action:" (LLM 可能不完全遵守)
-        # 這裡的邏輯保持不變，嘗試做二次清理
-        if "Thought:" in final_answer[:20] or "Action:" in final_answer[:20]:
-             logger.warning("⚠️ Final Answer 中可能仍包含 Agent 思考過程，嘗試再次清理...")
-             last_thought_match = list(re.finditer(r"Thought:", final_answer, re.IGNORECASE))
-             last_action_match = list(re.finditer(r"Action:", final_answer, re.IGNORECASE))
-             last_obs_match = list(re.finditer(r"Observation:", final_answer, re.IGNORECASE))
-
-             last_marker_pos = -1
-             if last_thought_match: last_marker_pos = max(last_marker_pos, last_thought_match[-1].start())
-             if last_action_match: last_marker_pos = max(last_marker_pos, last_action_match[-1].start())
-             if last_obs_match: last_marker_pos = max(last_marker_pos, last_obs_match[-1].start())
-
-             if last_marker_pos != -1:
-                  next_newline = final_answer.find('\n', last_marker_pos)
-                  if next_newline != -1:
-                       cleaned_answer = final_answer[next_newline:].strip()
-                       if cleaned_answer:
-                            logger.debug(f"二次清理後的 Answer (前 200 字): {cleaned_answer[:200]}...")
-                            return cleaned_answer
-                       else:
-                            logger.warning("⚠️ 二次清理後答案為空，返回原始提取內容")
-                            return final_answer
-                  else:
-                       return final_answer
-             else:
-                  return final_answer
-        else: # 沒有包含其他標記，是乾淨的
-             return final_answer
-    else:
-        # 如果找不到 "Final Answer:"
-        logger.warning("⚠️ 未在 Agent 輸出中找到 'Final Answer:' 標記。")
-        # 檢查是否 LLM 把答案直接放在最後一個 "Thought:" 之後
-        thought_matches = list(re.finditer(r"Thought:(.*)", agent_output, re.IGNORECASE))
-        if thought_matches:
-            last_thought_content = thought_matches[-1].group(1).strip()
-            # 檢查最後一個 Thought 後面是否緊接著 Action 或 Observation
-            remaining_text = agent_output[thought_matches[-1].end():]
-            if "Action:" not in remaining_text and "Observation:" not in remaining_text and len(last_thought_content) > 30: # 簡單判斷
-                 logger.warning("⚠️ 嘗試使用最後一個 'Thought:' 後的內容作為答案。")
-                 return last_thought_content
-
-        logger.warning("⚠️ 無法可靠提取答案，返回原始輸出 (可能不完整或包含思考)。")
-        return agent_output.strip() # 直接返回原始輸出
-
-
 # ==================== Prompt 模板 ====================
 # (保持不變)
 RAG_PROMPT = PromptTemplate(
@@ -619,6 +349,9 @@ RAG_PROMPT = PromptTemplate(
 回答：""",
     input_variables=["context", "chat_history", "question"]
 )
+
+# 更新 ChatService 的 RAG Prompt
+chat_service.rag_prompt = RAG_PROMPT
 
 CONTENT_PROMPT = PromptTemplate(
     template="""你是市長的專屬文案生成助理。
@@ -682,148 +415,32 @@ async def chat(request: ChatRequest):
     """
     對話 API (LangChain Agent + Memory 或 RAG Chain)
     支援不同角色：public (善寶) 或 staff (幕僚助理)
-    """
-    # 根據角色設置不同的預設錯誤訊息
-    if request.role == "staff":
-        reply: str = "抱歉，系統暫時無法回應，請稍後再試。"
-    else:
-        reply: str = "哎呀，善寶好像有點累了，或是網路不太穩定，請稍後再試一次喔！"
 
-    sources: List[str] = []
-    thought_process_str: Optional[str] = None
-    result: Optional[Dict[str, Any]] = None
+    此端點已重構為使用 ChatService 處理所有對話邏輯
+    """
     session_id = request.session_id or "default"
-    raw_agent_output: Optional[str] = None # 用於儲存 Agent 原始輸出
+    memory = get_memory(session_id)
 
     try:
-        logger.info(f"💬 [{session_id}] 收到問題 (角色: {request.role}): {request.message}")
-
-        memory = get_memory(session_id)
-
-        if request.use_agent:
-            memory.output_key = "output"
-
-            # 根據角色選擇預先創建的 agent
-            if request.role == "staff":
-                if not staff_agent:
-                    logger.error(f"❌ Staff Agent 未成功初始化，無法處理幕僚請求 ({session_id})")
-                    raise HTTPException(status_code=500, detail="幕僚系統 Agent 元件啟動失敗，請稍後再試。")
-                current_agent = staff_agent
-                logger.info(f"🎭 使用幕僚助理模式")
-            else:
-                if not agent:
-                    logger.error(f"❌ Agent 未成功初始化，無法處理公眾請求 ({session_id})")
-                    raise HTTPException(status_code=500, detail="系統 Agent 元件啟動失敗，請稍後再試。")
-                current_agent = agent
-                logger.info(f"🎭 使用善寶模式")
-
-            agent_executor = AgentExecutor(
-                agent=current_agent,
-                tools=tools,
-                memory=memory,
-                verbose=True,
-                max_iterations=5,
-                handle_parsing_errors=True, # 讓 Agent 嘗試自我修正格式錯誤
-            )
-
-            logger.info(f"🚀 [{session_id}] 開始執行 Agent...")
-            try:
-                result = agent_executor.invoke({"input": request.message})
-                raw_agent_output = result.get("output") # 取得原始輸出
-
-                if raw_agent_output:
-                     # --- 加入後處理：提取乾淨的 Final Answer ---
-                     reply = extract_final_answer(raw_agent_output)
-                     # 如果清理後是空的，或還是包含思考過程 (清理失敗)
-                     if not reply or "Thought:" in reply[:20] or "Action:" in reply[:20]:
-                         logger.warning(f"⚠️ 清理後 Final Answer 為空或仍包含思考，使用預設錯誤回覆 ({session_id})")
-                         # 檢查原始輸出是否就是答案 (適用於 Agent 沒找到 Final Answer: 但直接回答)
-                         # 並且原始輸出長度大於一定值，避免只是簡單的 "OK" 或錯誤訊息
-                         if len(raw_agent_output) > 30 and "Thought:" not in raw_agent_output[:50]:
-                              reply = raw_agent_output # 假設原始輸出就是答案
-                         else:
-                              reply = "抱歉，我好像有點詞窮了，可以換個方式問嗎？" # 維持預設錯誤
-                else:
-                     logger.warning(f"⚠️ Agent 執行結果中缺少 'output' ({session_id})")
-                     # reply 會保持為預設錯誤訊息
-
-            except Exception as agent_exec_err:
-                 logger.error(f"❌ AgentExecutor.invoke 執行失敗 ({session_id}): {agent_exec_err}", exc_info=True)
-                 reply = f"抱歉，我在處理您的問題時遇到了一些困難 ({type(agent_exec_err).__name__})。請您換個方式再問一次，或聯繫管理員。"
-                 result = {"error": str(agent_exec_err)} # 記錄錯誤
-
-            logger.info(f"✅ [{session_id}] Agent 執行完成 (或捕捉到錯誤)")
-
-            # --- 思考過程改用原始輸出 ---
-            if raw_agent_output:
-                # 限制長度，避免傳給前端的資料過大
-                thought_process_str = raw_agent_output[:2000] + ("..." if len(raw_agent_output) > 2000 else "")
-            elif "error" in result:
-                 thought_process_str = f"Agent 執行錯誤: {result['error'][:1000]}..."
-            else:
-                 thought_process_str = "Agent 未成功產生輸出。"
-
-            # 從 Agent 的中間步驟提取工具使用記錄作為來源
-            sources = []
-            if "intermediate_steps" in result:
-                for action, observation in result["intermediate_steps"]:
-                    tool_name = action.tool if hasattr(action, 'tool') else '未知工具'
-                    # 如果使用了知識庫工具，標記為來源
-                    if tool_name in ["搜尋知識庫", "查詢特定政策名稱"]:
-                        sources.append(f"{tool_name}")
-                logger.info(f"📚 [{session_id}] 從 Agent 中間步驟提取到 {len(sources)} 個工具使用記錄")
-
-            # 如果 sources 為空但有成功回覆，表示可能沒有使用工具
-            if not sources and reply and reply != "抱歉，我好像有點詞窮了，可以換個方式問嗎？":
-                sources = []  # 保持為空，表示未使用知識庫
-
-        else: # 使用 RAG Chain
-            memory.output_key = "answer"
-            qa_chain = ConversationalRetrievalChain.from_llm(
-                llm=llm,
-                retriever=vectorstore.as_retriever(search_kwargs={"k": 3}),
-                memory=memory,
-                combine_docs_chain_kwargs={"prompt": RAG_PROMPT},
-                return_source_documents=True,
-                verbose=True
-            )
-
-            logger.info(f"🚀 [{session_id}] 開始執行 RAG Chain...")
-            result = qa_chain.invoke({"question": request.message})
-            logger.info(f"✅ [{session_id}] RAG Chain 執行完成")
-
-            reply = result.get("answer", reply)
-            thought_process_str = "使用 RAG Chain 模式，無 ReAct 思考過程。"
-            sources = [
-                doc.metadata.get("source", "未知來源").split('/')[-1] # 只取檔名
-                for doc in result.get("source_documents", [])
-            ]
-
-        logger.info(f"🤖 [{session_id}] 最終回覆 (前100字): {reply[:100]}...")
-
-        return ChatResponse(
-            reply=reply,
-            sources=list(set(sources)), # 去重
+        # 使用 ChatService 處理對話
+        result = await chat_service.process_chat(
+            message=request.message,
             session_id=session_id,
-            timestamp=datetime.now().isoformat(),
-            thought_process=thought_process_str
+            memory=memory,
+            use_agent=request.use_agent,
+            role=request.role
         )
 
-    # 主 try 區塊的 except
+        return ChatResponse(**result)
+
+    except ValueError as e:
+        # Agent 未初始化錯誤
+        logger.error(f"❌ Agent 初始化錯誤 ({session_id}): {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
-        error_msg = str(e).replace('{', '{{').replace('}', '}}')  # 轉義大括號避免格式化錯誤
-        logger.error(f"❌ 對話處理中發生未預期錯誤 ({session_id}): {error_msg}", exc_info=True)
-        error_thought_process = f"系統層級錯誤: {error_msg}"
-        if result and isinstance(result, dict):
-            error_thought_process += f"\n最後的 Agent/Chain 結果: {str(result)[:500]}..."
-
-        return ChatResponse(
-            reply=reply,
-            sources=[],
-            session_id=session_id,
-            timestamp=datetime.now().isoformat(),
-            thought_process=error_thought_process
-        )
+        # 其他未預期錯誤
+        logger.error(f"❌ 對話處理失敗 ({session_id}): {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"對話處理失敗: {str(e)}")
 
 # --- /api/generate 保持不變 ---
 @app.post("/api/generate")
