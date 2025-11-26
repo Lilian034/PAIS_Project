@@ -165,34 +165,41 @@ class ContentGenerator:
         try:
             # 從知識庫檢索相關資料
             context = self._retrieve_context(topic)
-            
-            # 取得記憶
+
+            # 取得記憶並手動提取 chat_history
             memory = self.memory_manager.get_memory(task_id)
-            
-            # 建立 Chain
+            chat_history = memory.load_memory_variables({}).get("chat_history", "")
+
+            # 建立 Chain（不使用自動 memory，手動傳入 chat_history）
             chain = LLMChain(
                 llm=self.llm,
                 prompt=self.prompt,
-                memory=memory,
                 verbose=True
             )
-            
+
             # 生成文案
             logger.info(f"🚀 開始生成文案: {task_id} - {topic}")
             result = await chain.ainvoke({
                 "topic": topic,
                 "style": style,
                 "length": length,
-                "context": context
+                "context": context,
+                "chat_history": chat_history
             })
-            
+
             content = result["text"].strip()
-            
+
+            # 手動保存到記憶
+            memory.save_context(
+                {"input": f"生成文案 - 主題: {topic}, 風格: {style}, 長度: {length}"},
+                {"text": content}
+            )
+
             # 記錄生成結果到記憶
             self.memory_manager.add_generation_record(
                 task_id, topic, style, content
             )
-            
+
             logger.info(f"✅ 文案生成完成: {task_id} ({len(content)} 字)")
             return content
             
