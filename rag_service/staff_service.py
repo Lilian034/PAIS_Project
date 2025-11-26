@@ -11,8 +11,7 @@ from models.staff_models import (
 from services.content_generator import ContentGenerator
 from services.memory_manager import StaffMemoryManager
 from services.elevenlabs_service import ElevenLabsService
-from services.runway_service import RunwayService
-from services.video_composer import VideoComposer
+from services.heygen_service import HeyGenService
 from utils.db_helper import StaffDatabase
 from utils.task_manager import TaskManager
 
@@ -51,8 +50,7 @@ content_gen = ContentGenerator(memory_mgr)
 
 # 多媒體服務
 voice_service = ElevenLabsService()
-video_service = RunwayService()
-composer_service = VideoComposer()
+heygen_service = HeyGenService()
 
 # 密碼驗證
 STAFF_PASSWORD = os.getenv("STAFF_PASSWORD", "staff123456")
@@ -295,58 +293,78 @@ async def generate_voice(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/staff/media/video/{task_id}", response_model=MediaResponse)
-async def generate_video(
+@app.post("/api/staff/media/avatar-video/{task_id}", response_model=MediaResponse)
+async def generate_avatar_video(
     task_id: str,
     image_path: str,
-    prompt: str = None,
     authorized: bool = Depends(verify_password)
 ):
     """
-    步驟 4: 圖片轉影片
-    
-    使用 Runway API 將圖片轉成影片
+    步驟 4: 生成 Avatar Video（會說話的數位分身）
+
+    使用 HeyGen API 將語音 + 圖片 → 會說話的數位分身影片
+    前置條件：語音必須已經生成
     """
     try:
         # 取得任務
         task = task_mgr.get_task(task_id)
         if not task:
             raise HTTPException(status_code=404, detail="任務不存在")
-        
+
+        # 檢查語音是否已生成
+        media_records = db.get_media_records(task_id)
+        audio_file = None
+
+        for record in media_records:
+            if record.get('media_type') == 'voice' and record.get('status') == 'completed':
+                audio_file = record.get('file_path')
+                break
+
+        if not audio_file:
+            raise HTTPException(
+                status_code=400,
+                detail="請先生成語音！Avatar Video 需要語音文件。"
+            )
+
+        logger.info(f"🎬 開始生成 Avatar Video: {task_id}")
+        logger.info(f"  語音: {audio_file}")
+        logger.info(f"  圖片: {image_path}")
+
         # 建立媒體記錄
         media_id = task_mgr.create_media_record(task_id, MediaType.VIDEO.value)
-        
+
         # 更新任務狀態
         task_mgr.update_status(task_id, TaskStatus.GENERATING_VIDEO)
-        
-        # 生成影片
+
+        # 生成 Avatar Video
         try:
-            file_path = await video_service.generate_video(
+            file_path = await heygen_service.generate_avatar_video(
+                audio_path=audio_file,
                 image_path=image_path,
-                task_id=task_id,
-                prompt=prompt
+                task_id=task_id
             )
-            
+
             task_mgr.complete_media(media_id, file_path)
             task_mgr.update_status(task_id, TaskStatus.COMPLETED)
-            logger.info(f"✅ 影片生成成功: {task_id}")
-            
+            logger.info(f"✅ Avatar Video 生成成功: {task_id}")
+
             return MediaResponse(
                 success=True,
                 task_id=task_id,
-                media_type=MediaType.VIDEO.value,
+                media_type="avatar_video",
                 file_path=file_path,
-                message="影片生成完成，所有流程結束"
+                message="Avatar Video 生成完成！市長數位分身已生成"
             )
-            
+
         except Exception as video_error:
             task_mgr.fail_media(media_id)
+            task_mgr.update_status(task_id, TaskStatus.FAILED)
             raise video_error
-        
+
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ 影片生成失敗: {e}")
+        logger.error(f"❌ Avatar Video 生成失敗: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -373,168 +391,6 @@ async def get_media_status(
         raise
     except Exception as e:
         logger.error(f"❌ 查詢狀態失敗: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/staff/media/compose/{task_id}", response_model=MediaResponse)
-async def compose_audio_video(
-    task_id: str,
-    audio_delay: float = 0.0,
-    authorized: bool = Depends(verify_password)
-):
-    """
-    步驟 5: 音畫合成
-
-    將已生成的語音和影片合併成最終影片
-    """
-    try:
-        # 檢查任務是否存在
-        task = task_mgr.get_task(task_id)
-        if not task:
-            raise HTTPException(status_code=404, detail="任務不存在")
-
-        # 獲取媒體記錄
-        media_records = db.get_media_records(task_id)
-
-        # 找到語音和影片文件
-        voice_file = None
-        video_file = None
-
-        for record in media_records:
-            if record.get('media_type') == 'voice' and record.get('status') == 'completed':
-                voice_file = record.get('file_path')
-            elif record.get('media_type') == 'video' and record.get('status') == 'completed':
-                video_file = record.get('file_path')
-
-        if not voice_file:
-            raise HTTPException(status_code=400, detail="找不到已生成的語音文件")
-        if not video_file:
-            raise HTTPException(status_code=400, detail="找不到已生成的影片文件")
-
-        logger.info(f"🎬 開始合成音畫: {task_id}")
-        logger.info(f"  語音: {voice_file}")
-        logger.info(f"  影片: {video_file}")
-
-        # 執行音畫合成
-        try:
-            final_video_path = await composer_service.merge_audio_video(
-                video_path=video_file,
-                audio_path=voice_file,
-                audio_delay=audio_delay
-            )
-
-            # 更新任務狀態
-            task_mgr.update_status(task_id, TaskStatus.COMPLETED)
-
-            logger.info(f"✅ 音畫合成完成: {final_video_path}")
-
-            return MediaResponse(
-                success=True,
-                task_id=task_id,
-                media_type="composed_video",
-                file_path=final_video_path,
-                message="音畫合成完成！最終影片已生成"
-            )
-
-        except Exception as compose_error:
-            logger.error(f"❌ 音畫合成失敗: {compose_error}")
-            raise compose_error
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"❌ 音畫合成失敗: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/staff/media/full-workflow/{task_id}", response_model=MediaResponse)
-async def full_media_workflow(
-    task_id: str,
-    image_path: str,
-    prompt: str = None,
-    audio_delay: float = 0.0,
-    authorized: bool = Depends(verify_password)
-):
-    """
-    完整工作流：文案 → 語音 + 影片（並行）→ 音畫合成
-
-    這是一個端到端的 API，自動執行所有步驟：
-    1. 檢查文案是否已審核
-    2. 並行生成語音和影片
-    3. 合併音畫
-    """
-    try:
-        # 檢查任務
-        task = task_mgr.get_task(task_id)
-        if not task:
-            raise HTTPException(status_code=404, detail="任務不存在")
-
-        if task['status'] != TaskStatus.APPROVED.value:
-            raise HTTPException(status_code=400, detail="任務尚未審核通過")
-
-        content = task.get('content')
-        if not content:
-            raise HTTPException(status_code=400, detail="無文案內容")
-
-        logger.info(f"🚀 開始完整工作流: {task_id}")
-
-        # Step 1 & 2: 並行生成語音和影片
-        import asyncio
-
-        async def gen_voice():
-            media_id = task_mgr.create_media_record(task_id, MediaType.VOICE.value)
-            task_mgr.update_status(task_id, TaskStatus.GENERATING_VOICE)
-            try:
-                path = await voice_service.generate_voice(content, task_id)
-                task_mgr.complete_media(media_id, path)
-                return path
-            except Exception as e:
-                task_mgr.fail_media(media_id)
-                raise e
-
-        async def gen_video():
-            media_id = task_mgr.create_media_record(task_id, MediaType.VIDEO.value)
-            task_mgr.update_status(task_id, TaskStatus.GENERATING_VIDEO)
-            try:
-                path = await video_service.generate_video(image_path, task_id, prompt)
-                task_mgr.complete_media(media_id, path)
-                return path
-            except Exception as e:
-                task_mgr.fail_media(media_id)
-                raise e
-
-        # 並行執行
-        logger.info("⚡ 並行生成語音和影片...")
-        voice_path, video_path = await asyncio.gather(gen_voice(), gen_video())
-
-        logger.info(f"✅ 語音生成完成: {voice_path}")
-        logger.info(f"✅ 影片生成完成: {video_path}")
-
-        # Step 3: 音畫合成
-        logger.info("🎬 開始音畫合成...")
-        final_video_path = await composer_service.merge_audio_video(
-            video_path=video_path,
-            audio_path=voice_path,
-            audio_delay=audio_delay
-        )
-
-        # 更新任務狀態
-        task_mgr.update_status(task_id, TaskStatus.COMPLETED)
-
-        logger.info(f"✅ 完整工作流完成: {final_video_path}")
-
-        return MediaResponse(
-            success=True,
-            task_id=task_id,
-            media_type="composed_video",
-            file_path=final_video_path,
-            message="完整工作流完成！語音、影片已生成並合成"
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"❌ 完整工作流失敗: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -43,7 +43,7 @@ services:
       - STAFF_PASSWORD=${STAFF_PASSWORD}
       - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
       - MAYOR_VOICE_ID=${MAYOR_VOICE_ID}
-      - RUNWAY_API_KEY=${RUNWAY_API_KEY}
+      - HEYGEN_API_KEY=${HEYGEN_API_KEY}
     depends_on:
       - qdrant
     restart: unless-stopped

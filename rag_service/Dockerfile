@@ -3,9 +3,8 @@ FROM python:3.11-slim
 # 設置工作目錄
 WORKDIR /app
 
-# 安裝系統依賴（包括 FFmpeg）
+# 安裝系統依賴
 RUN apt-get update && apt-get install -y \
-    ffmpeg \
     libsm6 \
     libxext6 \
     libxrender-dev \
