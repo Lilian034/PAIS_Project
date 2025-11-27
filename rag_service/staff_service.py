@@ -11,7 +11,7 @@ from models.staff_models import (
 from services.content_generator import ContentGenerator
 from services.memory_manager import StaffMemoryManager
 from services.elevenlabs_service import ElevenLabsService
-from services.runway_service import RunwayService
+from services.heygen_service import HeyGenService
 from utils.db_helper import StaffDatabase
 from utils.task_manager import TaskManager
 
@@ -50,7 +50,7 @@ content_gen = ContentGenerator(memory_mgr)
 
 # 多媒體服務
 voice_service = ElevenLabsService()
-video_service = RunwayService()
+heygen_service = HeyGenService()
 
 # 密碼驗證
 STAFF_PASSWORD = os.getenv("STAFF_PASSWORD", "staff123456")
@@ -293,58 +293,78 @@ async def generate_voice(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/staff/media/video/{task_id}", response_model=MediaResponse)
-async def generate_video(
+@app.post("/api/staff/media/avatar-video/{task_id}", response_model=MediaResponse)
+async def generate_avatar_video(
     task_id: str,
     image_path: str,
-    prompt: str = None,
     authorized: bool = Depends(verify_password)
 ):
     """
-    步驟 4: 圖片轉影片
-    
-    使用 Runway API 將圖片轉成影片
+    步驟 4: 生成 Avatar Video（會說話的數位分身）
+
+    使用 HeyGen API 將語音 + 圖片 → 會說話的數位分身影片
+    前置條件：語音必須已經生成
     """
     try:
         # 取得任務
         task = task_mgr.get_task(task_id)
         if not task:
             raise HTTPException(status_code=404, detail="任務不存在")
-        
+
+        # 檢查語音是否已生成
+        media_records = db.get_media_records(task_id)
+        audio_file = None
+
+        for record in media_records:
+            if record.get('media_type') == 'voice' and record.get('status') == 'completed':
+                audio_file = record.get('file_path')
+                break
+
+        if not audio_file:
+            raise HTTPException(
+                status_code=400,
+                detail="請先生成語音！Avatar Video 需要語音文件。"
+            )
+
+        logger.info(f"🎬 開始生成 Avatar Video: {task_id}")
+        logger.info(f"  語音: {audio_file}")
+        logger.info(f"  圖片: {image_path}")
+
         # 建立媒體記錄
         media_id = task_mgr.create_media_record(task_id, MediaType.VIDEO.value)
-        
+
         # 更新任務狀態
         task_mgr.update_status(task_id, TaskStatus.GENERATING_VIDEO)
-        
-        # 生成影片
+
+        # 生成 Avatar Video
         try:
-            file_path = await video_service.generate_video(
+            file_path = await heygen_service.generate_avatar_video(
+                audio_path=audio_file,
                 image_path=image_path,
-                task_id=task_id,
-                prompt=prompt
+                task_id=task_id
             )
-            
+
             task_mgr.complete_media(media_id, file_path)
             task_mgr.update_status(task_id, TaskStatus.COMPLETED)
-            logger.info(f"✅ 影片生成成功: {task_id}")
-            
+            logger.info(f"✅ Avatar Video 生成成功: {task_id}")
+
             return MediaResponse(
                 success=True,
                 task_id=task_id,
-                media_type=MediaType.VIDEO.value,
+                media_type="avatar_video",
                 file_path=file_path,
-                message="影片生成完成，所有流程結束"
+                message="Avatar Video 生成完成！市長數位分身已生成"
             )
-            
+
         except Exception as video_error:
             task_mgr.fail_media(media_id)
+            task_mgr.update_status(task_id, TaskStatus.FAILED)
             raise video_error
-        
+
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ 影片生成失敗: {e}")
+        logger.error(f"❌ Avatar Video 生成失敗: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
