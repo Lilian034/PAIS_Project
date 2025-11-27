@@ -266,13 +266,16 @@ class ChatService:
         if final_answer_marker in raw_output:
             # 找到最後一個 Final Answer（避免重複）
             parts = raw_output.split(final_answer_marker)
-            answer = parts[-1].strip()
+            answer = parts[-1]
+
+            # 強力去除開頭的所有空白字符和換行符
+            answer = answer.lstrip()
 
             # 移除可能殘留的思考過程
             for marker in ["Thought:", "Action:", "Observation:"]:
                 if marker in answer:
                     # 只取 Final Answer 到下一個標記之間的內容
-                    answer = answer.split(marker)[0].strip()
+                    answer = answer.split(marker)[0].rstrip()
 
             return answer
 
