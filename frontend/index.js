@@ -151,7 +151,7 @@ async function sendMessage() {
     console.error('API 連接錯誤:', error);
     
     // 顯示友善的錯誤訊息
-    const errorMsg = `😅 抱歉，目前無法連接到知識庫系統<br>
+    const errorMsg = `抱歉，目前無法連接到知識庫系統<br>
       <span style="font-size:12px;color:#6b7280;">
       錯誤訊息: ${escapeHTML(error.message)}<br>
       請確認後端服務已啟動，或聯繫技術人員
@@ -216,8 +216,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // 健康檢查
   checkBackendHealth();
 
-  console.log('🎉 桃園市民政通 - AI 助手已就緒！');
-  console.log('📡 API 端點:', API_BASE_URL);
+  console.log('🎉 桃園市民政通-AI助手已就緒！');
+  console.log('📡 API端點:', API_BASE_URL);
   console.log('🆔 Session ID:', getSessionId());
 });
 
