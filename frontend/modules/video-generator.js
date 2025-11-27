@@ -99,7 +99,7 @@ export function setCurrentTaskId(taskId, type = 'content') {
 // ==================== 私有函數 ====================
 
 /**
- * 處理影片生成
+ * 處理影片生成（HeyGen Avatar Video）
  */
 async function handleVideoGenerate() {
     // 檢查是否有上傳的照片
@@ -108,50 +108,41 @@ async function handleVideoGenerate() {
         return;
     }
 
+    // 檢查是否有任務ID（需要先生成語音）
+    let taskId = currentTaskId || currentVoiceTaskId;
+    if (!taskId) {
+        showNotification('請先生成文案和語音！', 'warning');
+        return;
+    }
+
     try {
-        showNotification('正在生成影片，這可能需要1-5分鐘，請耐心等候...', 'info');
+        showNotification('正在生成 Avatar Video，預計需要 5-10 分鐘，請耐心等候...', 'info');
 
         // 使用第一張上傳的照片
         const imagePath = uploadedPhotoPaths[0];
 
-        // 步驟 1: 如果沒有當前任務ID，創建一個臨時任務
-        let taskId = currentTaskId || currentVoiceTaskId;
-
-        if (!taskId) {
-            // 創建臨時任務
-            const tempText = '影片生成任務';
-            const contentResult = await APIClient.staff.generateContent(tempText, 'formal', 'short');
-
-            if (!contentResult.success) {
-                showNotification(`創建任務失敗: ${contentResult.error}`, 'error');
-                return;
-            }
-
-            taskId = contentResult.task_id;
-        }
-
         currentVideoTaskId = taskId;
 
-        // 步驟 2: 生成影片
-        const videoResult = await APIClient.staff.generateVideo(taskId, imagePath, '自然動態效果');
+        // 生成 Avatar Video（會說話的數位分身）
+        const videoResult = await APIClient.staff.generateVideo(taskId, imagePath);
 
         if (!videoResult.success) {
-            showNotification(`影片生成失敗: ${videoResult.error}`, 'error');
+            showNotification(`Avatar Video 生成失敗: ${videoResult.error}`, 'error');
             return;
         }
 
         // 成功生成影片
         const videoPath = videoResult.file_path;
-        generatedVideoUrl = `/${videoPath}`; // 構建影片URL
+        generatedVideoUrl = `/${videoPath}`;
 
-        showNotification(`影片生成成功！任務ID: ${taskId}`, 'success');
+        showNotification('Avatar Video 生成完成！', 'success');
 
         // 顯示影片預覽
         displayVideoPlayer(generatedVideoUrl);
 
     } catch (error) {
-        console.error('❌ 影片生成錯誤:', error);
-        showNotification(`影片生成過程中發生錯誤: ${error.message}`, 'error');
+        console.error('❌ Avatar Video 生成錯誤:', error);
+        showNotification(`生成過程中發生錯誤: ${error.message}`, 'error');
     }
 }
 

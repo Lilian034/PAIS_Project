@@ -199,12 +199,12 @@ class APIClient {
         },
 
         /**
-         * 生成視頻
+         * 生成 Avatar Video（HeyGen）
          */
         async generateVideo(taskId, imagePath, prompt = null) {
             try {
-                const queryParams = `image_path=${encodeURIComponent(imagePath)}${prompt ? '&prompt=' + encodeURIComponent(prompt) : ''}`;
-                const data = await request(`${API_CONFIG.staffURL}/media/video/${taskId}?${queryParams}`, {
+                const queryParams = `image_path=${encodeURIComponent(imagePath)}`;
+                const data = await request(`${API_CONFIG.staffURL}/media/avatar-video/${taskId}?${queryParams}`, {
                     method: 'POST',
                     requireAuth: true
                 });
