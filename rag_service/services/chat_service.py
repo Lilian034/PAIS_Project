@@ -163,8 +163,14 @@ class ChatService:
             result = agent_executor.invoke({"input": message})
             raw_output = result.get("output", "")
 
+            # 調試：記錄原始輸出
+            logger.debug(f"📝 [{session_id}] Raw output: {raw_output[:500]}...")
+
             # 提取 Final Answer
             reply = self._extract_final_answer(raw_output)
+
+            # 調試：記錄提取結果
+            logger.debug(f"✂️ [{session_id}] Extracted reply: {reply[:200] if reply else '(empty)'}")
 
             # 驗證回覆品質
             if not self._is_valid_reply(reply, raw_output):
@@ -279,10 +285,13 @@ class ChatService:
 
             return answer
 
-        # 如果沒有 Final Answer 標記，但內容看起來像回答
-        if len(raw_output) > 30 and "Thought:" not in raw_output[:50]:
-            return raw_output.strip()
+        # 如果沒有 Final Answer 標記，直接使用原始輸出
+        # 只要內容長度合理就接受
+        if len(raw_output.strip()) > 10:
+            logger.warning(f"⚠️ 沒有找到 Final Answer 標記，使用原始輸出")
+            return raw_output.lstrip()
 
+        logger.error(f"❌ 無法從輸出中提取有效回答")
         return ""
 
     def _is_valid_reply(self, reply: str, raw_output: str) -> bool:
