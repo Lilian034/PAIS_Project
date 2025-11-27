@@ -112,12 +112,22 @@ async function sendMessage() {
   }, 300);
 
   try {
+    // 檢查 sendChatMessage 是否存在
+    if (typeof sendChatMessage !== 'function') {
+      throw new Error('sendChatMessage 函數未定義，請檢查 public-api.js 是否正確載入');
+    }
+
+    console.log('📤 發送訊息:', message);
+    console.log('🆔 Session ID:', getSessionId());
+
     // 呼叫 FastAPI 後端（使用 public-api.js 中的函數）
     const data = await sendChatMessage(message, getSessionId(), true);
-    
+
+    console.log('📥 收到回應:', data);
+
     // 移除思考中訊息
     removeTyping();
-    
+
     // 取得 AI 回應
     const aiReply = data.reply;
     
