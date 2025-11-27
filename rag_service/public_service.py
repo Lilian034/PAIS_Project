@@ -344,9 +344,7 @@ RAG_PROMPT = PromptTemplate(
 - 使用市長親切、專業的語氣
 - 如果資料中沒有答案，請誠實告知
 - 保持簡潔明瞭
-- 適時使用輕鬆的語氣
-
-回答：""",
+- 適時使用輕鬆的語氣""",
     input_variables=["context", "chat_history", "question"]
 )
 
