@@ -44,8 +44,8 @@ export async function generate() {
     outputDiv.innerHTML = '<div class="placeholder-text"><p>生成中，請稍候...</p></div>';
 
     try {
-        // 根據內容類型選擇風格
-        const style = getStyleByType(contentType);
+        // 直接使用內容類型作為 style（不再映射）
+        const style = contentType;
 
         // 調用 API
         const result = await APIClient.staff.generateContent(prompt, style, 'medium');
@@ -149,25 +149,6 @@ export function save() {
  */
 export function getCurrentTaskId() {
     return currentTaskId;
-}
-
-// ==================== 私有函數 ====================
-
-/**
- * 根據內容類型獲取風格
- * @param {string} contentType - 內容類型
- * @returns {string}
- */
-function getStyleByType(contentType) {
-    const styleMap = {
-        'press': 'formal',      // 新聞稿
-        'speech': 'formal',     // 演講稿
-        'facebook': 'casual',   // Facebook
-        'instagram': 'casual',  // Instagram
-        'poster': 'concise'     // 海報
-    };
-
-    return styleMap[contentType] || 'formal';
 }
 
 // ==================== 全局導出（供 HTML 內聯事件使用） ====================

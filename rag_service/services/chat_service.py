@@ -52,7 +52,7 @@ class ChatService:
         self.staff_agent = staff_agent
         self.rag_prompt = rag_prompt
 
-        logger.info("✅ ChatService 初始化完成")
+        logger.info("✅ChatService初始化完成")
 
     async def process_chat(
         self,
