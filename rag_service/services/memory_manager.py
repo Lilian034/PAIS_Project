@@ -17,7 +17,7 @@ class StaffMemoryManager:
         self.memory_store: Dict[str, ConversationBufferMemory] = {}
         self.base_path = Path(base_path)
         self.base_path.mkdir(parents=True, exist_ok=True)
-        logger.info(f"🧠 記憶管理器初始化: {self.base_path}")
+        logger.info(f"記憶管理器初始化: {self.base_path}")
     
     def get_memory(self, task_id: str) -> ConversationBufferMemory:
         """
@@ -69,9 +69,9 @@ class StaffMemoryManager:
         len_diff = len(edited) - len(original)
         if abs(len_diff) > 20:
             if len_diff > 0:
-                insights.append("✏️ 幕僚傾向於更詳細的描述，增加了具體內容")
+                insights.append("幕僚傾向於更詳細的描述，增加了具體內容")
             else:
-                insights.append("✂️ 幕僚傾向於精簡表達，刪除了冗餘內容")
+                insights.append("幕僚傾向於精簡表達，刪除了冗餘內容")
 
         # 2. 檢查特定用詞的替換（簡單版本）
         replacements = []
@@ -84,7 +84,6 @@ class StaffMemoryManager:
             ("非常", "相當"),
             ("非常", "十分"),
             ("我們", "市府團隊"),
-            ("我們", "咱們"),
         ]
 
         for old_word, new_word in common_pairs:
@@ -92,20 +91,20 @@ class StaffMemoryManager:
                 replacements.append(f"將「{old_word}」改為「{new_word}」")
 
         if replacements:
-            insights.append(f"📝 用詞優化: {'; '.join(replacements)}")
+            insights.append(f"用詞優化: {'; '.join(replacements)}")
 
         # 3. 檢查是否加入了數據或事實
         if ("%" in edited and "%" not in original) or ("座" in edited and "座" not in original):
-            insights.append("📊 幕僚加入了具體數據，使內容更有說服力")
+            insights.append("幕僚加入了具體數據，使內容更有說服力")
 
         # 4. 檢查是否調整了開頭
         original_start = original[:20] if len(original) >= 20 else original
         edited_start = edited[:20] if len(edited) >= 20 else edited
         if original_start != edited_start:
-            insights.append(f"🎯 開頭調整: 從「{original_start}...」改為「{edited_start}...」")
+            insights.append(f"開頭調整: 從「{original_start}...」改為「{edited_start}...」")
 
         if not insights:
-            insights.append("✅ 幕僚做了細微調整，整體結構保持不變")
+            insights.append("幕僚做了細微調整，整體結構保持不變")
 
         return "\n".join(insights)
     
@@ -118,7 +117,7 @@ class StaffMemoryManager:
             {"text": content}
         )
         
-        logger.info(f"📝 記錄文案生成: {task_id}")
+        logger.info(f"記錄文案生成: {task_id}")
     
     def clear_memory(self, task_id: str):
         """清除特定任務的記憶"""
@@ -132,7 +131,7 @@ class StaffMemoryManager:
             if history_file.exists():
                 history_file.unlink()
 
-            logger.info(f"🗑️ 清除記憶: {memory_key}")
+            logger.info(f"清除記憶: {memory_key}")
 
     def get_learning_summary(self, task_id: str) -> dict:
         """
