@@ -5,10 +5,12 @@ from enum import Enum
 
 
 class ContentStyle(str, Enum):
-    """文案風格"""
-    FORMAL = "formal"
-    CASUAL = "casual"
-    HUMOROUS = "humorous"
+    """文案類型"""
+    PRESS = "press"           # 新聞稿
+    SPEECH = "speech"         # 演講稿
+    FACEBOOK = "facebook"     # Facebook 貼文
+    INSTAGRAM = "instagram"   # Instagram 貼文
+    POSTER = "poster"         # 宣傳海報文案
 
 
 class ContentLength(str, Enum):
