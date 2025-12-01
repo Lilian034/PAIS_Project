@@ -85,8 +85,11 @@ class APIClient {
     static staff = {
         /**
          * 生成文案
+         * @param {string} topic - 文案主題
+         * @param {string} style - 文案類型 (press/speech/facebook/instagram/poster)
+         * @param {string} length - 文案長度 (short/medium/long)
          */
-        async generateContent(topic, style = 'formal', length = 'medium') {
+        async generateContent(topic, style = 'speech', length = 'medium') {
             try {
                 const data = await request(`${API_CONFIG.staffURL}/content/generate`, {
                     method: 'POST',
