@@ -626,7 +626,7 @@ async def upload_file(
     folder: str = Form(""),
     admin: bool = Depends(verify_admin)
 ):
-    """單個檔案上傳並直接加入知識庫"""
+    """單個檔案上傳（文檔加入知識庫，圖片僅保存）"""
     try:
         # 建立上傳目標資料夾
         upload_folder = Path("documents")
@@ -644,6 +644,7 @@ async def upload_file(
 
         logger.info(f"📤 接收到檔案上傳: {file.filename}, 儲存至: {file_path}")
 
+        # 保存文件
         try:
             with open(file_path, "wb") as buffer:
                 content = await file.read()
@@ -653,7 +654,23 @@ async def upload_file(
              logger.error(f"❌ 儲存上傳檔案失敗 ({file.filename}): {save_err}", exc_info=True)
              raise HTTPException(status_code=500, detail=f"儲存檔案失敗: {save_err}")
 
-        logger.info(f"📚 開始處理單一檔案: {file_path}")
+        # 判斷是否為圖片文件
+        image_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg', '.ico'}
+        file_ext = file_path.suffix.lower()
+
+        # 如果是圖片文件，只保存不加入知識庫
+        if file_ext in image_extensions or folder == 'images':
+            logger.info(f"🖼️ 圖片文件已保存: {file_path}")
+            return {
+                "success": True,
+                "message": "圖片上傳成功",
+                "filename": file.filename,
+                "file_path": str(file_path),
+                "type": "image"
+            }
+
+        # 非圖片文件：加入知識庫
+        logger.info(f"📚 開始處理文檔: {file_path}")
         docs = load_document(str(file_path))
 
         if not docs:
