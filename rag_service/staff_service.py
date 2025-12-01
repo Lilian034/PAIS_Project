@@ -427,6 +427,93 @@ async def generate_avatar_video(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/staff/media/avatar-video-upload", response_model=MediaResponse)
+async def generate_avatar_video_with_upload(
+    audio_path: str,
+    image_path: str,
+    authorized: bool = Depends(verify_password)
+):
+    """
+    生成 Avatar Video - 使用上傳的音頻文件
+
+    此端點允許直接使用上傳的音頻和圖片生成 Avatar Video
+    不需要先執行文案生成和語音生成步驟
+
+    Args:
+        audio_path: 上傳的音頻文件路徑
+        image_path: 上傳的圖片文件路徑
+    """
+    try:
+        # 檢查 API 配置
+        if not heygen_service.api_key:
+            raise HTTPException(
+                status_code=503,
+                detail="HeyGen API Key 未配置，請在 .env 檔案中設定 HEYGEN_API_KEY"
+            )
+
+        # 檢查文件是否存在
+        from pathlib import Path
+
+        audio_file_path = Path(audio_path)
+        if not audio_file_path.exists():
+            raise HTTPException(
+                status_code=400,
+                detail=f"音頻文件不存在：{audio_path}"
+            )
+
+        image_file_path = Path(image_path)
+        if not image_file_path.exists():
+            raise HTTPException(
+                status_code=400,
+                detail=f"圖片文件不存在：{image_path}"
+            )
+
+        # 創建一個臨時任務ID
+        import time
+        task_id = f"upload_{int(time.time())}"
+
+        logger.info(f"🎬 開始生成 Avatar Video (上傳模式): {task_id}")
+        logger.info(f"  音頻: {audio_path}")
+        logger.info(f"  圖片: {image_path}")
+
+        # 生成 Avatar Video
+        try:
+            file_path = await heygen_service.generate_avatar_video(
+                audio_path=str(audio_file_path),
+                image_path=str(image_file_path),
+                task_id=task_id
+            )
+
+            logger.info(f"✅ Avatar Video 生成成功 (上傳模式): {task_id}")
+
+            return MediaResponse(
+                success=True,
+                task_id=task_id,
+                media_type="avatar_video",
+                file_path=file_path,
+                message="Avatar Video 生成完成！市長數位分身已生成"
+            )
+
+        except TimeoutError as te:
+            raise HTTPException(status_code=504, detail=f"影片生成超時：{str(te)}，請稍後重試")
+        except ValueError as ve:
+            raise HTTPException(status_code=400, detail=f"參數錯誤：{str(ve)}")
+        except Exception as video_error:
+            error_msg = str(video_error)
+            if "quota" in error_msg.lower() or "credit" in error_msg.lower():
+                raise HTTPException(status_code=402, detail="HeyGen API 配額已用完，請檢查帳戶餘額")
+            elif "unauthorized" in error_msg.lower() or "401" in error_msg:
+                raise HTTPException(status_code=401, detail="HeyGen API Key 無效，請檢查配置")
+            else:
+                raise HTTPException(status_code=500, detail=f"影片生成失敗：{error_msg}")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Avatar Video 生成失敗 (上傳模式): {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/staff/media/status/{task_id}")
 async def get_media_status(
     task_id: str,

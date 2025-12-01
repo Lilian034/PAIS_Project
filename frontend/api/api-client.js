@@ -202,12 +202,28 @@ class APIClient {
         },
 
         /**
-         * 生成 Avatar Video（HeyGen）
+         * 生成 Avatar Video（HeyGen）- 使用任務音頻
          */
         async generateVideo(taskId, imagePath, prompt = null) {
             try {
                 const queryParams = `image_path=${encodeURIComponent(imagePath)}`;
                 const data = await request(`${API_CONFIG.staffURL}/media/avatar-video/${taskId}?${queryParams}`, {
+                    method: 'POST',
+                    requireAuth: true
+                });
+                return { success: true, ...data };
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
+        },
+
+        /**
+         * 生成 Avatar Video（HeyGen）- 使用上傳的音頻
+         */
+        async generateVideoWithUploadedAudio(audioPath, imagePath, prompt = null) {
+            try {
+                const queryParams = `audio_path=${encodeURIComponent(audioPath)}&image_path=${encodeURIComponent(imagePath)}`;
+                const data = await request(`${API_CONFIG.staffURL}/media/avatar-video-upload?${queryParams}`, {
                     method: 'POST',
                     requireAuth: true
                 });
