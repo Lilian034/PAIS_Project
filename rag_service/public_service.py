@@ -654,8 +654,9 @@ async def upload_file(
              logger.error(f"❌ 儲存上傳檔案失敗 ({file.filename}): {save_err}", exc_info=True)
              raise HTTPException(status_code=500, detail=f"儲存檔案失敗: {save_err}")
 
-        # 判斷是否為圖片文件
+        # 判斷文件類型
         image_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg', '.ico'}
+        audio_extensions = {'.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac', '.wma'}
         file_ext = file_path.suffix.lower()
 
         # 如果是圖片文件，只保存不加入知識庫
@@ -669,13 +670,25 @@ async def upload_file(
                 "type": "image"
             }
 
-        # 非圖片文件：加入知識庫
+        # 如果是音頻文件，只保存不加入知識庫
+        if file_ext in audio_extensions or folder == 'audio':
+            logger.info(f"🎵 音頻文件已保存: {file_path}")
+            return {
+                "success": True,
+                "message": "音頻上傳成功",
+                "filename": file.filename,
+                "file_path": str(file_path),
+                "type": "audio"
+            }
+
+        # 非圖片/音頻文件：加入知識庫
         logger.info(f"📚 開始處理文檔: {file_path}")
         docs = load_document(str(file_path))
 
         if not docs:
             logger.warning(f"⚠️ 檔案 {file_path} 載入失敗或無內容，無法加入知識庫")
             return {
+                "success": False,
                 "message": "檔案已成功上傳，但無法讀取內容或內容為空，未加入知識庫。",
                 "filename": file.filename,
                 "chunks": 0,
@@ -709,6 +722,7 @@ async def upload_file(
         if not splits:
              logger.warning(f"⚠️ 檔案 {file_path.name} 分割後無片段，無法加入知識庫")
              return {
+                "success": False,
                 "message": "檔案已成功上傳，但分割後無有效內容，未加入知識庫。",
                 "filename": file.filename,
                 "chunks": 0,
@@ -719,8 +733,10 @@ async def upload_file(
             vectorstore.add_documents(splits)
             logger.info(f"✅ 檔案 {file_path.name} 的片段已成功加入向量資料庫")
             return {
+                "success": True,
                 "message": "✅ 檔案上傳並成功加入知識庫",
                 "filename": file.filename,
+                "file_path": str(file_path),
                 "chunks": total_chunks
             }
         except Exception as add_doc_err:

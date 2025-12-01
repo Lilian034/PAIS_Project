@@ -616,13 +616,143 @@ async def get_learning_summary(
 # 因為知識庫管理屬於幕僚功能，所以放在這裡
 
 @app.post("/api/upload")
-async def upload_document():
+async def upload_file(
+    file: UploadFile = File(...),
+    folder: str = Form(""),
+    authorized: bool = Depends(verify_password)
+):
     """
-    上傳文件到知識庫
-    (這個功能原本在 public_service，但屬於幕僚管理功能)
+    上傳文件（幕僚端）
+    - 文檔類文件：加入知識庫
+    - 圖片和音頻文件：僅保存，不加入知識庫
     """
-    # TODO: 實作文件上傳邏輯
-    return {"message": "請參考 public_service.py 的實作"}
+    try:
+        from pathlib import Path
+        from datetime import datetime
+        from langchain.text_splitter import RecursiveCharacterTextSplitter
+        from rag_service.document_loader import load_document
+
+        # 建立上傳目標資料夾
+        upload_folder = Path("documents")
+        if folder and folder.strip():
+            # 清理資料夾路徑，防止路徑遍歷攻擊
+            clean_folder = folder.strip().replace("..", "").replace("\\", "/")
+            upload_folder = upload_folder / clean_folder
+
+        upload_folder.mkdir(parents=True, exist_ok=True)
+        file_path = upload_folder / Path(file.filename).name
+
+        if file_path.exists():
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            file_path = upload_folder / f"{file_path.stem}_{timestamp}{file_path.suffix}"
+
+        logger.info(f"📤 接收到檔案上傳 (幕僚端): {file.filename}, 儲存至: {file_path}")
+
+        # 保存文件
+        try:
+            with open(file_path, "wb") as buffer:
+                content = await file.read()
+                buffer.write(content)
+            logger.info(f"💾 檔案儲存成功: {file_path}")
+        except Exception as save_err:
+            logger.error(f"❌ 儲存上傳檔案失敗 ({file.filename}): {save_err}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"儲存檔案失敗: {save_err}")
+
+        # 判斷文件類型
+        image_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg', '.ico'}
+        audio_extensions = {'.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac', '.wma'}
+        file_ext = file_path.suffix.lower()
+
+        # 如果是圖片文件，只保存不加入知識庫
+        if file_ext in image_extensions or folder == 'images':
+            logger.info(f"🖼️ 圖片文件已保存: {file_path}")
+            return {
+                "success": True,
+                "message": "圖片上傳成功",
+                "filename": file.filename,
+                "file_path": str(file_path),
+                "type": "image"
+            }
+
+        # 如果是音頻文件，只保存不加入知識庫
+        if file_ext in audio_extensions or folder == 'audio':
+            logger.info(f"🎵 音頻文件已保存: {file_path}")
+            return {
+                "success": True,
+                "message": "音頻上傳成功",
+                "filename": file.filename,
+                "file_path": str(file_path),
+                "type": "audio"
+            }
+
+        # 非圖片/音頻文件：加入知識庫
+        logger.info(f"📚 開始處理文檔: {file_path}")
+        docs = load_document(str(file_path))
+
+        if not docs:
+            logger.warning(f"⚠️ 檔案 {file_path} 載入失敗或無內容，無法加入知識庫")
+            return {
+                "success": False,
+                "message": "檔案已成功上傳，但無法讀取內容或內容為空，未加入知識庫。",
+                "filename": file.filename,
+                "chunks": 0,
+                "error": "Failed to load or empty document"
+            }
+
+        for doc in docs:
+            # 確保 file_path 是絕對路徑，然後計算相對於工作目錄的路徑
+            abs_file_path = file_path.resolve()
+            abs_cwd = Path.cwd().resolve()
+            try:
+                relative_path = abs_file_path.relative_to(abs_cwd)
+            except ValueError:
+                # 如果無法計算相對路徑，直接使用檔案路徑
+                relative_path = file_path
+
+            doc.metadata["source"] = str(relative_path).replace("\\", "/")
+            doc.metadata["uploaded_at"] = datetime.now().isoformat()
+            doc.metadata["filename"] = file_path.name
+
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000,
+            chunk_overlap=200,
+            separators=["\n\n", "\n", "。", "！", "？", "，", "、", " ", ""],
+            length_function=len
+        )
+        splits = text_splitter.split_documents(docs)
+        total_chunks = len(splits)
+        logger.info(f"📄 檔案 {file_path.name} 分割成 {total_chunks} 個片段")
+
+        if not splits:
+            logger.warning(f"⚠️ 檔案 {file_path.name} 分割後無片段，無法加入知識庫")
+            return {
+                "success": False,
+                "message": "檔案已成功上傳，但分割後無有效內容，未加入知識庫。",
+                "filename": file.filename,
+                "chunks": 0,
+                "error": "No chunks generated after splitting"
+            }
+
+        try:
+            from rag_service.public_service import vectorstore
+            vectorstore.add_documents(splits)
+            logger.info(f"✅ 檔案 {file_path.name} 的片段已成功加入向量資料庫")
+            return {
+                "success": True,
+                "message": "✅ 檔案上傳並成功加入知識庫",
+                "filename": file.filename,
+                "file_path": str(file_path),
+                "chunks": total_chunks
+            }
+        except Exception as add_doc_err:
+            logger.error(f"❌ 將檔案 {file_path.name} 加入向量資料庫時失敗: {add_doc_err}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"加入知識庫失敗: {add_doc_err}")
+
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        logger.error(f"❌ 處理檔案上傳時發生未預期錯誤 ({file.filename}): {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"檔案上傳處理失敗: {str(e)}")
 
 
 if __name__ == "__main__":
