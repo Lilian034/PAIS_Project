@@ -78,11 +78,19 @@ async def root():
 @app.get("/health")
 async def health_check():
     """健康檢查"""
+    # 檢查 API keys 配置狀態
+    elevenlabs_configured = bool(voice_service.api_key and voice_service.voice_id)
+    heygen_configured = bool(heygen_service.api_key)
+
     return {
         "status": "healthy",
         "database": "✅ connected",
         "memory": "✅ active",
-        "llm": "✅ ready"
+        "llm": "✅ ready",
+        "services": {
+            "elevenlabs": "✅ configured" if elevenlabs_configured else "⚠️ not configured",
+            "heygen": "✅ configured" if heygen_configured else "⚠️ not configured"
+        }
     }
 
 
@@ -246,46 +254,67 @@ async def generate_voice(
 ):
     """
     步驟 3: 語音克隆
-    
+
     使用 ElevenLabs API 將文案轉成語音
     """
     try:
+        # 檢查 API 配置
+        if not voice_service.api_key:
+            raise HTTPException(
+                status_code=503,
+                detail="ElevenLabs API Key 未配置，請在 .env 檔案中設定 ELEVENLABS_API_KEY"
+            )
+        if not voice_service.voice_id:
+            raise HTTPException(
+                status_code=503,
+                detail="語音 ID 未配置，請在 .env 檔案中設定 MAYOR_VOICE_ID"
+            )
+
         # 取得任務
         task = task_mgr.get_task(task_id)
         if not task:
             raise HTTPException(status_code=404, detail="任務不存在")
-        
+
         if task['status'] != TaskStatus.APPROVED.value:
-            raise HTTPException(status_code=400, detail="任務尚未審核通過")
-        
+            raise HTTPException(status_code=400, detail="任務尚未審核通過，請先審核文案")
+
         content = task.get('content')
         if not content:
             raise HTTPException(status_code=400, detail="無文案內容")
-        
+
         # 建立媒體記錄
         media_id = task_mgr.create_media_record(task_id, MediaType.VOICE.value)
-        
+
         # 更新任務狀態
         task_mgr.update_status(task_id, TaskStatus.GENERATING_VOICE)
-        
+
         # 生成語音
         try:
             file_path = await voice_service.generate_voice(content, task_id)
             task_mgr.complete_media(media_id, file_path)
             logger.info(f"✅ 語音生成成功: {task_id}")
-            
+
             return MediaResponse(
                 success=True,
                 task_id=task_id,
                 media_type=MediaType.VOICE.value,
                 file_path=file_path,
-                message="語音生成完成"
+                message="語音生成完成！已使用市長聲音克隆"
             )
-            
+
+        except ValueError as ve:
+            task_mgr.fail_media(media_id)
+            raise HTTPException(status_code=400, detail=f"參數錯誤：{str(ve)}")
         except Exception as voice_error:
             task_mgr.fail_media(media_id)
-            raise voice_error
-        
+            error_msg = str(voice_error)
+            if "quota" in error_msg.lower():
+                raise HTTPException(status_code=402, detail="ElevenLabs API 配額已用完，請檢查帳戶餘額")
+            elif "unauthorized" in error_msg.lower() or "401" in error_msg:
+                raise HTTPException(status_code=401, detail="ElevenLabs API Key 無效，請檢查配置")
+            else:
+                raise HTTPException(status_code=500, detail=f"語音生成失敗：{error_msg}")
+
     except HTTPException:
         raise
     except Exception as e:
@@ -304,8 +333,16 @@ async def generate_avatar_video(
 
     使用 HeyGen API 將語音 + 圖片 → 會說話的數位分身影片
     前置條件：語音必須已經生成
+    注意：影片生成需要 5-10 分鐘，請耐心等待
     """
     try:
+        # 檢查 API 配置
+        if not heygen_service.api_key:
+            raise HTTPException(
+                status_code=503,
+                detail="HeyGen API Key 未配置，請在 .env 檔案中設定 HEYGEN_API_KEY"
+            )
+
         # 取得任務
         task = task_mgr.get_task(task_id)
         if not task:
@@ -323,7 +360,15 @@ async def generate_avatar_video(
         if not audio_file:
             raise HTTPException(
                 status_code=400,
-                detail="請先生成語音！Avatar Video 需要語音文件。"
+                detail="請先生成語音！Avatar Video 需要語音文件。請先執行「生成語音」步驟。"
+            )
+
+        # 檢查圖片文件是否存在
+        from pathlib import Path
+        if not Path(image_path).exists():
+            raise HTTPException(
+                status_code=400,
+                detail=f"圖片文件不存在：{image_path}，請上傳市長照片"
             )
 
         logger.info(f"🎬 開始生成 Avatar Video: {task_id}")
@@ -356,10 +401,24 @@ async def generate_avatar_video(
                 message="Avatar Video 生成完成！市長數位分身已生成"
             )
 
+        except TimeoutError as te:
+            task_mgr.fail_media(media_id)
+            task_mgr.update_status(task_id, TaskStatus.FAILED)
+            raise HTTPException(status_code=504, detail=f"影片生成超時：{str(te)}，請稍後重試")
+        except ValueError as ve:
+            task_mgr.fail_media(media_id)
+            task_mgr.update_status(task_id, TaskStatus.FAILED)
+            raise HTTPException(status_code=400, detail=f"參數錯誤：{str(ve)}")
         except Exception as video_error:
             task_mgr.fail_media(media_id)
             task_mgr.update_status(task_id, TaskStatus.FAILED)
-            raise video_error
+            error_msg = str(video_error)
+            if "quota" in error_msg.lower() or "credit" in error_msg.lower():
+                raise HTTPException(status_code=402, detail="HeyGen API 配額已用完，請檢查帳戶餘額")
+            elif "unauthorized" in error_msg.lower() or "401" in error_msg:
+                raise HTTPException(status_code=401, detail="HeyGen API Key 無效，請檢查配置")
+            else:
+                raise HTTPException(status_code=500, detail=f"影片生成失敗：{error_msg}")
 
     except HTTPException:
         raise
@@ -391,6 +450,53 @@ async def get_media_status(
         raise
     except Exception as e:
         logger.error(f"❌ 查詢狀態失敗: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/staff/media/voices")
+async def get_available_voices(authorized: bool = Depends(verify_password)):
+    """獲取 ElevenLabs 可用的語音列表"""
+    try:
+        if not voice_service.api_key:
+            raise HTTPException(
+                status_code=503,
+                detail="ElevenLabs API Key 未配置"
+            )
+
+        voices = await voice_service.get_available_voices()
+        return {
+            "success": True,
+            "voices": voices,
+            "current_voice_id": voice_service.voice_id
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ 獲取語音列表失敗: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/staff/media/avatars")
+async def get_available_avatars(authorized: bool = Depends(verify_password)):
+    """獲取 HeyGen 可用的 Avatar 列表"""
+    try:
+        if not heygen_service.api_key:
+            raise HTTPException(
+                status_code=503,
+                detail="HeyGen API Key 未配置"
+            )
+
+        avatars = await heygen_service.get_avatar_list()
+        return {
+            "success": True,
+            "avatars": avatars
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ 獲取 Avatar 列表失敗: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

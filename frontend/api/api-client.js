@@ -212,6 +212,60 @@ class APIClient {
             } catch (error) {
                 return { success: false, error: error.message };
             }
+        },
+
+        /**
+         * 查詢媒體生成狀態
+         */
+        async getMediaStatus(taskId) {
+            try {
+                const data = await request(`${API_CONFIG.staffURL}/media/status/${taskId}`, {
+                    requireAuth: true
+                });
+                return { success: true, ...data };
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
+        },
+
+        /**
+         * 獲取可用的語音列表
+         */
+        async getVoices() {
+            try {
+                const data = await request(`${API_CONFIG.staffURL}/media/voices`, {
+                    requireAuth: true
+                });
+                return { success: true, ...data };
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
+        },
+
+        /**
+         * 獲取可用的 Avatar 列表
+         */
+        async getAvatars() {
+            try {
+                const data = await request(`${API_CONFIG.staffURL}/media/avatars`, {
+                    requireAuth: true
+                });
+                return { success: true, ...data };
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
+        },
+
+        /**
+         * 健康檢查（包含 API 配置狀態）
+         */
+        async healthCheck() {
+            try {
+                const data = await request(`${API_CONFIG.staffURL.replace('/api/staff', '')}/health`);
+                return { success: true, ...data };
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
         }
     };
 
