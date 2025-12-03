@@ -825,7 +825,7 @@ async def clear_memory(session_id: str, admin: bool = Depends(verify_admin)):
 
 @app.get("/api/documents")
 async def list_documents(admin: bool = Depends(verify_admin)):
-    """列出知識庫中的所有文檔"""
+    """列出知識庫中的所有文檔（排除素材文件）"""
     try:
         docs_dir = Path("documents")
         if not docs_dir.exists():
@@ -833,12 +833,22 @@ async def list_documents(admin: bool = Depends(verify_admin)):
 
         documents = []
 
+        # 排除的目錄（素材目錄）
+        excluded_dirs = {'audio', 'images'}
+
         # 遍歷所有文件（包括子目錄）
         for file_path in docs_dir.rglob("*"):
             if file_path.is_file():
                 try:
-                    stat_info = file_path.stat()
+                    # 檢查是否在排除的目錄中
                     relative_path = file_path.relative_to(docs_dir)
+                    path_parts = relative_path.parts
+
+                    # 如果第一層目錄是 audio 或 images，跳過
+                    if len(path_parts) > 0 and path_parts[0] in excluded_dirs:
+                        continue
+
+                    stat_info = file_path.stat()
 
                     documents.append({
                         "filename": file_path.name,
@@ -855,7 +865,7 @@ async def list_documents(admin: bool = Depends(verify_admin)):
         # 按上傳時間排序（新到舊）
         documents.sort(key=lambda x: x["uploaded_at"], reverse=True)
 
-        logger.info(f"📂 列出文檔列表，共 {len(documents)} 個文件")
+        logger.info(f"📂 列出文檔列表，共 {len(documents)} 個文件（已排除素材文件）")
         return {
             "documents": documents,
             "total": len(documents)

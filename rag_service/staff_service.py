@@ -622,15 +622,25 @@ async def upload_file(
     authorized: bool = Depends(verify_password)
 ):
     """
-    上傳文件（幕僚端）
-    - 文檔類文件：加入知識庫
-    - 圖片和音頻文件：僅保存，不加入知識庫
+    上傳媒體文件（幕僚端）
+    僅處理音頻和圖片文件（Avatar Video 生成素材）
+    文檔管理請使用 /api/documents/upload
     """
     try:
         from pathlib import Path
         from datetime import datetime
-        from langchain.text_splitter import RecursiveCharacterTextSplitter
-        from rag_service.document_loader import load_document
+
+        # 判斷文件類型
+        image_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg', '.ico'}
+        audio_extensions = {'.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac', '.wma'}
+        file_ext = Path(file.filename).suffix.lower()
+
+        # 只接受音頻和圖片文件
+        if file_ext not in image_extensions and file_ext not in audio_extensions:
+            raise HTTPException(
+                status_code=400,
+                detail=f"此端點僅支持音頻和圖片文件上傳。文檔請使用文檔管理功能。"
+            )
 
         # 建立上傳目標資料夾
         upload_folder = Path("documents")
@@ -646,7 +656,7 @@ async def upload_file(
             timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
             file_path = upload_folder / f"{file_path.stem}_{timestamp}{file_path.suffix}"
 
-        logger.info(f"📤 接收到檔案上傳 (幕僚端): {file.filename}, 儲存至: {file_path}")
+        logger.info(f"📤 接收到媒體文件上傳: {file.filename}, 儲存至: {file_path}")
 
         # 保存文件
         try:
@@ -658,13 +668,8 @@ async def upload_file(
             logger.error(f"❌ 儲存上傳檔案失敗 ({file.filename}): {save_err}", exc_info=True)
             raise HTTPException(status_code=500, detail=f"儲存檔案失敗: {save_err}")
 
-        # 判斷文件類型
-        image_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg', '.ico'}
-        audio_extensions = {'.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac', '.wma'}
-        file_ext = file_path.suffix.lower()
-
-        # 如果是圖片文件，只保存不加入知識庫
-        if file_ext in image_extensions or folder == 'images':
+        # 返回成功結果
+        if file_ext in image_extensions:
             logger.info(f"🖼️ 圖片文件已保存: {file_path}")
             return {
                 "success": True,
@@ -673,9 +678,7 @@ async def upload_file(
                 "file_path": str(file_path),
                 "type": "image"
             }
-
-        # 如果是音頻文件，只保存不加入知識庫
-        if file_ext in audio_extensions or folder == 'audio':
+        else:
             logger.info(f"🎵 音頻文件已保存: {file_path}")
             return {
                 "success": True,
@@ -685,73 +688,10 @@ async def upload_file(
                 "type": "audio"
             }
 
-        # 非圖片/音頻文件：加入知識庫
-        logger.info(f"📚 開始處理文檔: {file_path}")
-        docs = load_document(str(file_path))
-
-        if not docs:
-            logger.warning(f"⚠️ 檔案 {file_path} 載入失敗或無內容，無法加入知識庫")
-            return {
-                "success": False,
-                "message": "檔案已成功上傳，但無法讀取內容或內容為空，未加入知識庫。",
-                "filename": file.filename,
-                "chunks": 0,
-                "error": "Failed to load or empty document"
-            }
-
-        for doc in docs:
-            # 確保 file_path 是絕對路徑，然後計算相對於工作目錄的路徑
-            abs_file_path = file_path.resolve()
-            abs_cwd = Path.cwd().resolve()
-            try:
-                relative_path = abs_file_path.relative_to(abs_cwd)
-            except ValueError:
-                # 如果無法計算相對路徑，直接使用檔案路徑
-                relative_path = file_path
-
-            doc.metadata["source"] = str(relative_path).replace("\\", "/")
-            doc.metadata["uploaded_at"] = datetime.now().isoformat()
-            doc.metadata["filename"] = file_path.name
-
-        text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000,
-            chunk_overlap=200,
-            separators=["\n\n", "\n", "。", "！", "？", "，", "、", " ", ""],
-            length_function=len
-        )
-        splits = text_splitter.split_documents(docs)
-        total_chunks = len(splits)
-        logger.info(f"📄 檔案 {file_path.name} 分割成 {total_chunks} 個片段")
-
-        if not splits:
-            logger.warning(f"⚠️ 檔案 {file_path.name} 分割後無片段，無法加入知識庫")
-            return {
-                "success": False,
-                "message": "檔案已成功上傳，但分割後無有效內容，未加入知識庫。",
-                "filename": file.filename,
-                "chunks": 0,
-                "error": "No chunks generated after splitting"
-            }
-
-        try:
-            from rag_service.public_service import vectorstore
-            vectorstore.add_documents(splits)
-            logger.info(f"✅ 檔案 {file_path.name} 的片段已成功加入向量資料庫")
-            return {
-                "success": True,
-                "message": "✅ 檔案上傳並成功加入知識庫",
-                "filename": file.filename,
-                "file_path": str(file_path),
-                "chunks": total_chunks
-            }
-        except Exception as add_doc_err:
-            logger.error(f"❌ 將檔案 {file_path.name} 加入向量資料庫時失敗: {add_doc_err}", exc_info=True)
-            raise HTTPException(status_code=500, detail=f"加入知識庫失敗: {add_doc_err}")
-
     except HTTPException as http_exc:
         raise http_exc
     except Exception as e:
-        logger.error(f"❌ 處理檔案上傳時發生未預期錯誤 ({file.filename}): {e}", exc_info=True)
+        logger.error(f"❌ 處理檔案上傳時發生未預期錯誤: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"檔案上傳處理失敗: {str(e)}")
 
 
