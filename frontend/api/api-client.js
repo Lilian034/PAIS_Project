@@ -293,7 +293,8 @@ class APIClient {
      */
     static documents = {
         /**
-         * 上傳文件
+         * 上傳媒體素材（音頻、圖片）
+         * 用於短影音生成，不加入知識庫
          */
         async upload(file, folder = '') {
             try {
@@ -304,7 +305,29 @@ class APIClient {
                 const data = await request(`${API_CONFIG.baseURL}/upload`, {
                     method: 'POST',
                     body: formData,
-                    requireAdminAuth: true
+                    requireAuth: true  // 使用幕僚密碼
+                });
+
+                return data.error ? { success: false, ...data } : { success: true, ...data };
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
+        },
+
+        /**
+         * 上傳政務文檔（PDF、DOCX等）
+         * 加入知識庫
+         */
+        async uploadDocument(file, folder = '') {
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                if (folder) formData.append('folder', folder);
+
+                const data = await request(`${API_CONFIG.baseURL}/documents/upload`, {
+                    method: 'POST',
+                    body: formData,
+                    requireAdminAuth: true  // 使用管理員密碼
                 });
 
                 return data.error ? { success: false, ...data } : { success: true, ...data };
