@@ -44,6 +44,12 @@ class HeyGenService:
 
                 async with httpx.AsyncClient(timeout=60.0) as client:
                     response = await client.post(url, headers=headers, files=files)
+
+                    # 添加詳細的錯誤日誌
+                    if not response.is_success:
+                        error_detail = response.text
+                        logger.error(f"❌ HeyGen API 錯誤: {response.status_code} - {error_detail}")
+
                     response.raise_for_status()
 
                     data = response.json()
@@ -51,6 +57,7 @@ class HeyGenService:
                     asset_id = data.get("data", {}).get("asset_id")
 
                     if not asset_id:
+                        logger.error(f"❌ API 響應無 asset_id: {data}")
                         raise ValueError("未獲取到音頻 Asset ID")
 
                     logger.info(f"📤 音頻上傳成功: {asset_id}")
@@ -94,12 +101,19 @@ class HeyGenService:
 
                 async with httpx.AsyncClient(timeout=60.0) as client:
                     response = await client.post(url, headers=headers, files=files)
+
+                    # 添加詳細的錯誤日誌
+                    if not response.is_success:
+                        error_detail = response.text
+                        logger.error(f"❌ HeyGen API 錯誤: {response.status_code} - {error_detail}")
+
                     response.raise_for_status()
 
                     data = response.json()
                     asset_id = data.get("data", {}).get("asset_id")
 
                     if not asset_id:
+                        logger.error(f"❌ API 響應無 asset_id: {data}")
                         raise ValueError("未獲取到圖片 Asset ID")
 
                     logger.info(f"📸 圖片上傳成功: {asset_id}")
