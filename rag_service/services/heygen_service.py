@@ -16,6 +16,7 @@ class HeyGenService:
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or os.getenv("HEYGEN_API_KEY")
         self.base_url = "https://api.heygen.com/v2"
+        self.upload_url = "https://upload.heygen.com/v1"  # 文件上传使用不同的 URL
 
         if not self.api_key:
             logger.warning("⚠️ HEYGEN_API_KEY 未設定")
@@ -34,8 +35,8 @@ class HeyGenService:
             raise ValueError("HeyGen API Key 未設定")
 
         try:
-            # 使用新的 Upload Asset API
-            url = f"{self.base_url}/asset"
+            # 使用新的 Upload Asset API（注意：使用 upload_url 而非 base_url）
+            url = f"{self.upload_url}/asset"
             headers = {"X-Api-Key": self.api_key}
 
             with open(audio_path, "rb") as f:
@@ -73,8 +74,8 @@ class HeyGenService:
             raise ValueError("HeyGen API Key 未設定")
 
         try:
-            # 使用新的 Upload Asset API
-            url = f"{self.base_url}/asset"
+            # 使用新的 Upload Asset API（注意：使用 upload_url 而非 base_url）
+            url = f"{self.upload_url}/asset"
             headers = {"X-Api-Key": self.api_key}
 
             # 根據文件擴展名設置正確的 MIME 類型
