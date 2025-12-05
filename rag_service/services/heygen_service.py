@@ -39,15 +39,12 @@ class HeyGenService:
             url = f"{self.upload_url}/asset"
             headers = {"X-Api-Key": self.api_key}
 
-            # 读取文件内容
-            with open(audio_path, "rb") as f:
-                file_content = f.read()
-
-            # 构造 multipart form data - 字段名必须是 "file"
-            files = {"file": (Path(audio_path).name, file_content, "audio/mpeg")}
-
+            # 使用 httpx 正確的文件上傳方式：在 AsyncClient 上下文中打開文件
             async with httpx.AsyncClient(timeout=60.0) as client:
-                response = await client.post(url, headers=headers, files=files)
+                with open(audio_path, "rb") as f:
+                    # 构造 multipart form data - 字段名必须是 "file"
+                    files = {"file": (Path(audio_path).name, f, "audio/mpeg")}
+                    response = await client.post(url, headers=headers, files=files)
 
                 # 添加詳細的錯誤日誌
                 if not response.is_success:
@@ -100,15 +97,12 @@ class HeyGenService:
             }
             mime_type = mime_types.get(file_ext, 'image/jpeg')
 
-            # 读取文件内容
-            with open(image_path, "rb") as f:
-                file_content = f.read()
-
-            # 构造 multipart form data - 字段名必须是 "file"
-            files = {"file": (Path(image_path).name, file_content, mime_type)}
-
+            # 使用 httpx 正確的文件上傳方式：在 AsyncClient 上下文中打開文件
             async with httpx.AsyncClient(timeout=60.0) as client:
-                response = await client.post(url, headers=headers, files=files)
+                with open(image_path, "rb") as f:
+                    # 构造 multipart form data - 字段名必须是 "file"
+                    files = {"file": (Path(image_path).name, f, mime_type)}
+                    response = await client.post(url, headers=headers, files=files)
 
                 # 添加詳細的錯誤日誌
                 if not response.is_success:
