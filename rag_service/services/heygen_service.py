@@ -39,30 +39,33 @@ class HeyGenService:
             url = f"{self.upload_url}/asset"
             headers = {"X-Api-Key": self.api_key}
 
+            # 读取文件内容
             with open(audio_path, "rb") as f:
-                # HeyGen API 可能期待字段名為 "asset" 而非 "file"
-                files = {"asset": (Path(audio_path).name, f, "audio/mpeg")}
+                file_content = f.read()
 
-                async with httpx.AsyncClient(timeout=60.0) as client:
-                    response = await client.post(url, headers=headers, files=files)
+            # 构造 multipart form data
+            files = {"asset": (Path(audio_path).name, file_content, "audio/mpeg")}
 
-                    # 添加詳細的錯誤日誌
-                    if not response.is_success:
-                        error_detail = response.text
-                        logger.error(f"❌ HeyGen API 錯誤: {response.status_code} - {error_detail}")
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.post(url, headers=headers, files=files)
 
-                    response.raise_for_status()
+                # 添加詳細的錯誤日誌
+                if not response.is_success:
+                    error_detail = response.text
+                    logger.error(f"❌ HeyGen API 錯誤: {response.status_code} - {error_detail}")
 
-                    data = response.json()
-                    # Upload Asset API 返回 asset_id 而不是 URL
-                    asset_id = data.get("data", {}).get("asset_id")
+                response.raise_for_status()
 
-                    if not asset_id:
-                        logger.error(f"❌ API 響應無 asset_id: {data}")
-                        raise ValueError("未獲取到音頻 Asset ID")
+                data = response.json()
+                # Upload Asset API 返回 asset_id 而不是 URL
+                asset_id = data.get("data", {}).get("asset_id")
 
-                    logger.info(f"📤 音頻上傳成功: {asset_id}")
-                    return asset_id
+                if not asset_id:
+                    logger.error(f"❌ API 響應無 asset_id: {data}")
+                    raise ValueError("未獲取到音頻 Asset ID")
+
+                logger.info(f"📤 音頻上傳成功: {asset_id}")
+                return asset_id
 
         except Exception as e:
             logger.error(f"❌ 音頻上傳失敗: {e}")
@@ -97,29 +100,32 @@ class HeyGenService:
             }
             mime_type = mime_types.get(file_ext, 'image/jpeg')
 
+            # 读取文件内容
             with open(image_path, "rb") as f:
-                # HeyGen API 可能期待字段名為 "asset" 而非 "file"
-                files = {"asset": (Path(image_path).name, f, mime_type)}
+                file_content = f.read()
 
-                async with httpx.AsyncClient(timeout=60.0) as client:
-                    response = await client.post(url, headers=headers, files=files)
+            # 构造 multipart form data
+            files = {"asset": (Path(image_path).name, file_content, mime_type)}
 
-                    # 添加詳細的錯誤日誌
-                    if not response.is_success:
-                        error_detail = response.text
-                        logger.error(f"❌ HeyGen API 錯誤: {response.status_code} - {error_detail}")
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.post(url, headers=headers, files=files)
 
-                    response.raise_for_status()
+                # 添加詳細的錯誤日誌
+                if not response.is_success:
+                    error_detail = response.text
+                    logger.error(f"❌ HeyGen API 錯誤: {response.status_code} - {error_detail}")
 
-                    data = response.json()
-                    asset_id = data.get("data", {}).get("asset_id")
+                response.raise_for_status()
 
-                    if not asset_id:
-                        logger.error(f"❌ API 響應無 asset_id: {data}")
-                        raise ValueError("未獲取到圖片 Asset ID")
+                data = response.json()
+                asset_id = data.get("data", {}).get("asset_id")
 
-                    logger.info(f"📸 圖片上傳成功: {asset_id}")
-                    return asset_id
+                if not asset_id:
+                    logger.error(f"❌ API 響應無 asset_id: {data}")
+                    raise ValueError("未獲取到圖片 Asset ID")
+
+                logger.info(f"📸 圖片上傳成功: {asset_id}")
+                return asset_id
 
         except Exception as e:
             logger.error(f"❌ 圖片上傳失敗: {e}")
