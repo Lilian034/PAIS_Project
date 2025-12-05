@@ -23,6 +23,11 @@ let uploadedAudioPath = null; // 保存已上傳的音頻路徑（供視頻生�
 // ==================== 初始化 ====================
 
 document.addEventListener('DOMContentLoaded', () => {
+    // 檢查登錄狀態
+    if (!checkLogin()) {
+        return; // 未登錄，等待用戶輸入密碼
+    }
+
     // 初始化所有功能模組
     TabManager.init();
     DocumentManager.init();
@@ -39,6 +44,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
     console.log('✅ 幕僚系統已啟動');
 });
+
+/**
+ * 檢查登錄狀態
+ */
+function checkLogin() {
+    const password = localStorage.getItem('staff_password');
+
+    if (!password) {
+        // 提示用戶輸入密碼
+        const inputPassword = prompt('請輸入幕僚系統密碼：', 'admin123');
+
+        if (!inputPassword) {
+            alert('未輸入密碼，無法使用幕僚系統');
+            return false;
+        }
+
+        // 保存密碼
+        localStorage.setItem('staff_password', inputPassword);
+        alert('登錄成功！');
+        location.reload(); // 重新載入頁面
+        return false;
+    }
+
+    return true;
+}
 
 /**
  * 檢查 API 連接
