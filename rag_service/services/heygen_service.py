@@ -40,7 +40,8 @@ class HeyGenService:
             headers = {"X-Api-Key": self.api_key}
 
             with open(audio_path, "rb") as f:
-                files = {"file": (Path(audio_path).name, f, "audio/mpeg")}
+                # HeyGen API 可能期待字段名為 "asset" 而非 "file"
+                files = {"asset": (Path(audio_path).name, f, "audio/mpeg")}
 
                 async with httpx.AsyncClient(timeout=60.0) as client:
                     response = await client.post(url, headers=headers, files=files)
@@ -97,7 +98,8 @@ class HeyGenService:
             mime_type = mime_types.get(file_ext, 'image/jpeg')
 
             with open(image_path, "rb") as f:
-                files = {"file": (Path(image_path).name, f, mime_type)}
+                # HeyGen API 可能期待字段名為 "asset" 而非 "file"
+                files = {"asset": (Path(image_path).name, f, mime_type)}
 
                 async with httpx.AsyncClient(timeout=60.0) as client:
                     response = await client.post(url, headers=headers, files=files)
