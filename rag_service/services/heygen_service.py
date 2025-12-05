@@ -22,36 +22,38 @@ class HeyGenService:
 
     async def upload_audio(self, audio_path: str) -> str:
         """
-        上傳音頻到 HeyGen
+        上傳音頻到 HeyGen（使用 Upload Asset API）
 
         Args:
             audio_path: 音頻文件路徑
 
         Returns:
-            音頻 URL
+            音頻 Asset ID
         """
         if not self.api_key:
             raise ValueError("HeyGen API Key 未設定")
 
         try:
-            url = f"{self.base_url}/audio/upload"
+            # 使用新的 Upload Asset API
+            url = f"{self.base_url}/asset"
             headers = {"X-Api-Key": self.api_key}
 
             with open(audio_path, "rb") as f:
-                files = {"file": f}
+                files = {"file": (Path(audio_path).name, f, "audio/mpeg")}
 
                 async with httpx.AsyncClient(timeout=60.0) as client:
                     response = await client.post(url, headers=headers, files=files)
                     response.raise_for_status()
 
                     data = response.json()
-                    audio_url = data.get("data", {}).get("url")
+                    # Upload Asset API 返回 asset_id 而不是 URL
+                    asset_id = data.get("data", {}).get("asset_id")
 
-                    if not audio_url:
-                        raise ValueError("未獲取到音頻 URL")
+                    if not asset_id:
+                        raise ValueError("未獲取到音頻 Asset ID")
 
-                    logger.info(f"📤 音頻上傳成功: {audio_url}")
-                    return audio_url
+                    logger.info(f"📤 音頻上傳成功: {asset_id}")
+                    return asset_id
 
         except Exception as e:
             logger.error(f"❌ 音頻上傳失敗: {e}")
@@ -59,39 +61,51 @@ class HeyGenService:
 
     async def upload_image(self, image_path: str) -> str:
         """
-        上傳圖片到 HeyGen（創建 Avatar）
+        上傳圖片到 HeyGen（使用 Upload Asset API）
 
         Args:
             image_path: 圖片路徑
 
         Returns:
-            Avatar ID
+            Image Asset ID
         """
         if not self.api_key:
             raise ValueError("HeyGen API Key 未設定")
 
         try:
-            url = f"{self.base_url}/avatar/upload"
+            # 使用新的 Upload Asset API
+            url = f"{self.base_url}/asset"
             headers = {"X-Api-Key": self.api_key}
 
+            # 根據文件擴展名設置正確的 MIME 類型
+            file_ext = Path(image_path).suffix.lower()
+            mime_types = {
+                '.png': 'image/png',
+                '.jpg': 'image/jpeg',
+                '.jpeg': 'image/jpeg',
+                '.gif': 'image/gif',
+                '.webp': 'image/webp'
+            }
+            mime_type = mime_types.get(file_ext, 'image/jpeg')
+
             with open(image_path, "rb") as f:
-                files = {"file": f}
+                files = {"file": (Path(image_path).name, f, mime_type)}
 
                 async with httpx.AsyncClient(timeout=60.0) as client:
                     response = await client.post(url, headers=headers, files=files)
                     response.raise_for_status()
 
                     data = response.json()
-                    avatar_id = data.get("data", {}).get("avatar_id")
+                    asset_id = data.get("data", {}).get("asset_id")
 
-                    if not avatar_id:
-                        raise ValueError("未獲取到 Avatar ID")
+                    if not asset_id:
+                        raise ValueError("未獲取到圖片 Asset ID")
 
-                    logger.info(f"📸 Avatar 創建成功: {avatar_id}")
-                    return avatar_id
+                    logger.info(f"📸 圖片上傳成功: {asset_id}")
+                    return asset_id
 
         except Exception as e:
-            logger.error(f"❌ Avatar 創建失敗: {e}")
+            logger.error(f"❌ 圖片上傳失敗: {e}")
             raise
 
     async def generate_avatar_video(
@@ -125,15 +139,15 @@ class HeyGenService:
 
             # 步驟 1: 上傳音頻
             logger.info("📤 上傳音頻...")
-            audio_url = await self.upload_audio(audio_path)
+            audio_asset_id = await self.upload_audio(audio_path)
 
-            # 步驟 2: 上傳圖片並創建 Avatar
-            logger.info("📸 創建 Avatar...")
-            avatar_id = await self.upload_image(image_path)
+            # 步驟 2: 上傳圖片
+            logger.info("📸 上傳圖片...")
+            image_asset_id = await self.upload_image(image_path)
 
             # 步驟 3: 創建 Avatar Video
             logger.info("🎥 創建 Avatar Video...")
-            video_id = await self._create_video(avatar_id, audio_url)
+            video_id = await self._create_video(image_asset_id, audio_asset_id)
 
             # 步驟 4: 輪詢狀態
             logger.info("⏳ 等待影片生成...")
@@ -150,25 +164,25 @@ class HeyGenService:
             logger.error(f"❌ Avatar Video 生成失敗: {e}")
             raise
 
-    async def _create_video(self, avatar_id: str, audio_url: str) -> str:
-        """創建 Avatar Video 任務"""
+    async def _create_video(self, image_asset_id: str, audio_asset_id: str) -> str:
+        """創建 Avatar Video 任務（使用 Asset ID）"""
         url = f"{self.base_url}/video/generate"
         headers = {
             "X-Api-Key": self.api_key,
             "Content-Type": "application/json"
         }
 
+        # 使用 asset_id 而不是 avatar_id 和 audio_url
         payload = {
             "video_inputs": [
                 {
                     "character": {
-                        "type": "avatar",
-                        "avatar_id": avatar_id,
-                        "avatar_style": "normal"
+                        "type": "photo_avatar",
+                        "image_asset_id": image_asset_id
                     },
                     "voice": {
                         "type": "audio",
-                        "audio_url": audio_url
+                        "audio_asset_id": audio_asset_id
                     },
                     "background": {
                         "type": "color",
