@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 from typing import Optional
 import httpx
+import requests  # 用於文件上傳（同步）
 import asyncio
 from loguru import logger
 
@@ -34,35 +35,38 @@ class HeyGenService:
         if not self.api_key:
             raise ValueError("HeyGen API Key 未設定")
 
-        try:
-            # 使用新的 Upload Asset API（注意：使用 upload_url 而非 base_url）
+        def _sync_upload():
+            """同步上傳函數（使用 requests）"""
             url = f"{self.upload_url}/asset"
             headers = {"X-Api-Key": self.api_key}
 
-            # 使用 httpx 正確的文件上傳方式：在 AsyncClient 上下文中打開文件
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                with open(audio_path, "rb") as f:
-                    # 构造 multipart form data - 字段名必须是 "file"
-                    files = {"file": (Path(audio_path).name, f, "audio/mpeg")}
-                    response = await client.post(url, headers=headers, files=files)
+            # 使用 requests 上傳文件
+            with open(audio_path, "rb") as f:
+                files = {"file": (Path(audio_path).name, f)}
+                response = requests.post(url, headers=headers, files=files, timeout=60.0)
 
-                # 添加詳細的錯誤日誌
-                if not response.is_success:
-                    error_detail = response.text
-                    logger.error(f"❌ HeyGen API 錯誤: {response.status_code} - {error_detail}")
-
+            # 添加詳細的錯誤日誌
+            if response.status_code != 200:
+                error_detail = response.text
+                logger.error(f"❌ HeyGen API 錯誤: {response.status_code} - {error_detail}")
                 response.raise_for_status()
 
-                data = response.json()
-                # Upload Asset API 返回 asset_id 而不是 URL
-                asset_id = data.get("data", {}).get("asset_id")
+            data = response.json()
+            return data
 
-                if not asset_id:
-                    logger.error(f"❌ API 響應無 asset_id: {data}")
-                    raise ValueError("未獲取到音頻 Asset ID")
+        try:
+            # 在線程池中執行同步操作
+            data = await asyncio.to_thread(_sync_upload)
 
-                logger.info(f"📤 音頻上傳成功: {asset_id}")
-                return asset_id
+            # Upload Asset API 返回 asset_id 而不是 URL
+            asset_id = data.get("data", {}).get("asset_id")
+
+            if not asset_id:
+                logger.error(f"❌ API 響應無 asset_id: {data}")
+                raise ValueError("未獲取到音頻 Asset ID")
+
+            logger.info(f"📤 音頻上傳成功: {asset_id}")
+            return asset_id
 
         except Exception as e:
             logger.error(f"❌ 音頻上傳失敗: {e}")
@@ -81,45 +85,38 @@ class HeyGenService:
         if not self.api_key:
             raise ValueError("HeyGen API Key 未設定")
 
-        try:
-            # 使用新的 Upload Asset API（注意：使用 upload_url 而非 base_url）
+        def _sync_upload():
+            """同步上傳函數（使用 requests）"""
             url = f"{self.upload_url}/asset"
             headers = {"X-Api-Key": self.api_key}
 
-            # 根據文件擴展名設置正確的 MIME 類型
-            file_ext = Path(image_path).suffix.lower()
-            mime_types = {
-                '.png': 'image/png',
-                '.jpg': 'image/jpeg',
-                '.jpeg': 'image/jpeg',
-                '.gif': 'image/gif',
-                '.webp': 'image/webp'
-            }
-            mime_type = mime_types.get(file_ext, 'image/jpeg')
+            # 使用 requests 上傳文件
+            with open(image_path, "rb") as f:
+                files = {"file": (Path(image_path).name, f)}
+                response = requests.post(url, headers=headers, files=files, timeout=60.0)
 
-            # 使用 httpx 正確的文件上傳方式：在 AsyncClient 上下文中打開文件
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                with open(image_path, "rb") as f:
-                    # 构造 multipart form data - 字段名必须是 "file"
-                    files = {"file": (Path(image_path).name, f, mime_type)}
-                    response = await client.post(url, headers=headers, files=files)
-
-                # 添加詳細的錯誤日誌
-                if not response.is_success:
-                    error_detail = response.text
-                    logger.error(f"❌ HeyGen API 錯誤: {response.status_code} - {error_detail}")
-
+            # 添加詳細的錯誤日誌
+            if response.status_code != 200:
+                error_detail = response.text
+                logger.error(f"❌ HeyGen API 錯誤: {response.status_code} - {error_detail}")
                 response.raise_for_status()
 
-                data = response.json()
-                asset_id = data.get("data", {}).get("asset_id")
+            data = response.json()
+            return data
 
-                if not asset_id:
-                    logger.error(f"❌ API 響應無 asset_id: {data}")
-                    raise ValueError("未獲取到圖片 Asset ID")
+        try:
+            # 在線程池中執行同步操作
+            data = await asyncio.to_thread(_sync_upload)
 
-                logger.info(f"📸 圖片上傳成功: {asset_id}")
-                return asset_id
+            # Upload Asset API 返回 asset_id 而不是 URL
+            asset_id = data.get("data", {}).get("asset_id")
+
+            if not asset_id:
+                logger.error(f"❌ API 響應無 asset_id: {data}")
+                raise ValueError("未獲取到圖片 Asset ID")
+
+            logger.info(f"📸 圖片上傳成功: {asset_id}")
+            return asset_id
 
         except Exception as e:
             logger.error(f"❌ 圖片上傳失敗: {e}")
