@@ -43,8 +43,8 @@ class HeyGenService:
             with open(audio_path, "rb") as f:
                 file_content = f.read()
 
-            # 构造 multipart form data
-            files = {"asset": (Path(audio_path).name, file_content, "audio/mpeg")}
+            # 构造 multipart form data - 字段名必须是 "file"
+            files = {"file": (Path(audio_path).name, file_content, "audio/mpeg")}
 
             async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.post(url, headers=headers, files=files)
@@ -104,8 +104,8 @@ class HeyGenService:
             with open(image_path, "rb") as f:
                 file_content = f.read()
 
-            # 构造 multipart form data
-            files = {"asset": (Path(image_path).name, file_content, mime_type)}
+            # 构造 multipart form data - 字段名必须是 "file"
+            files = {"file": (Path(image_path).name, file_content, mime_type)}
 
             async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.post(url, headers=headers, files=files)
