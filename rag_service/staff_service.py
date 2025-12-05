@@ -58,8 +58,11 @@ STAFF_PASSWORD = os.getenv("STAFF_PASSWORD", "staff123456")
 
 def verify_password(authorization: str = Header(None)):
     """驗證密碼"""
+    logger.info(f"🔐 收到授權請求 - Header: {authorization}, 預期: Bearer {STAFF_PASSWORD}")
     if not authorization or authorization != f"Bearer {STAFF_PASSWORD}":
+        logger.warning(f"❌ 授權失敗 - 收到: {authorization}, 預期: Bearer {STAFF_PASSWORD}")
         raise HTTPException(status_code=401, detail="未授權")
+    logger.info(f"✅ 授權成功")
     return True
 
 
