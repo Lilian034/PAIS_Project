@@ -147,12 +147,13 @@ def search_knowledge_base(query: str) -> str:
         retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
         docs = retriever.invoke(query) # 使用 invoke
         if docs:
-            # 處理每個文檔，立即轉義大括號
+            # 處理每個文檔，移除所有可能導致格式化問題的字符
             cleaned_contents = []
             for doc in docs:
                 content = doc.page_content
-                # 用雙括號替換單括號，完全避免格式化問題
-                content = content.replace("{", "((").replace("}", "))")
+                # 移除所有大括號和其他特殊格式字符
+                content = content.replace("{", "").replace("}", "")
+                content = content.replace("{{", "").replace("}}", "")
                 cleaned_contents.append(content)
 
             result = "\n\n".join(cleaned_contents)
@@ -171,24 +172,16 @@ def search_knowledge_base(query: str) -> str:
         return f"搜尋知識庫時發生錯誤: {str(e)}"
 
 def get_policy_info(policy_name: str) -> str:
-    """取得特定政策资讯工具"""
-    logger.info(f"🛠️ 使用工具 [查询政策]，政策名称: {policy_name}")
+    """取得特定政策資訊工具"""
+    logger.info(f"🛠️ 使用工具 [查詢政策]，政策名稱: {policy_name}")
     try:
-        docs = vectorstore.similarity_search(policy_name, k=1) # 只取最相关的 1 笔
+        docs = vectorstore.similarity_search(policy_name, k=1) # 只取最相關的 1 筆
         if docs:
             result = docs[0].page_content
-<<<<<<< HEAD
-            # 轉義大括號，避免格式化問題
-            result = result.replace("{", "((").replace("}", "))")
+            # 移除所有大括號，避免格式化問題
+            result = result.replace("{", "").replace("}", "")
+            result = result.replace("{{", "").replace("}}", "")
             logger.info(f"✅ 工具 [查詢政策] 找到資料 for policy: {policy_name}")
-=======
-            
-            # 清理可能导致格式化问题的字符
-            result = result.replace("{", "{{").replace("}", "}}")
-            
-            logger.info(f"✅ 工具 [查询政策] 找到资料 for policy: {policy_name}")
-
->>>>>>> 99da256 (4)
             # 限制回傳給 Agent 的長度
             max_obs_length = 1500
             if len(result) > max_obs_length:
