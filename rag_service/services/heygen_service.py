@@ -166,16 +166,19 @@ class HeyGenService:
         audio_path: str,
         image_path: str,
         task_id: str,
-        output_dir: str = "generated_content/videos"
+        output_dir: str = "generated_content/videos",
+        base_url: str = None
     ) -> str:
         """
         生成 Avatar Video（會說話的數位分身）
+        使用直接 URL 方式，不需要先上傳文件
 
         Args:
             audio_path: 音頻文件路徑
             image_path: 圖片路徑
             task_id: 任務 ID
             output_dir: 輸出目錄
+            base_url: 服務器基礎 URL（用於構建公開可訪問的 URL）
 
         Returns:
             生成的影片路徑
@@ -190,23 +193,28 @@ class HeyGenService:
 
             logger.info(f"🎬 開始生成 Avatar Video: {task_id}")
 
-            # 步驟 1: 上傳音頻
-            logger.info("📤 上傳音頻...")
-            audio_asset_id = await self.upload_audio(audio_path)
+            # 獲取服務器基礎 URL（從環境變量或參數）
+            if not base_url:
+                base_url = os.getenv("SERVER_BASE_URL", "http://localhost")
 
-            # 步驟 2: 上傳圖片
-            logger.info("📸 上傳圖片...")
-            image_asset_id = await self.upload_image(image_path)
+            # 構建公開可訪問的 URL（HeyGen 可以直接訪問）
+            # audio_path 例如: documents/audio/voice_123.mp3
+            # 轉換為: http://localhost/documents/audio/voice_123.mp3
+            audio_url = f"{base_url}/{audio_path}"
+            image_url = f"{base_url}/{image_path}"
 
-            # 步驟 3: 創建 Avatar Video
+            logger.info(f"🎵 音頻 URL: {audio_url}")
+            logger.info(f"📸 圖片 URL: {image_url}")
+
+            # 步驟 1: 創建 Avatar Video（使用 URL 直接生成）
             logger.info("🎥 創建 Avatar Video...")
-            video_id = await self._create_video(image_asset_id, audio_asset_id)
+            video_id = await self._create_video_with_urls(image_url, audio_url)
 
-            # 步驟 4: 輪詢狀態
+            # 步驟 2: 輪詢狀態
             logger.info("⏳ 等待影片生成...")
             video_url = await self._poll_video_status(video_id)
 
-            # 步驟 5: 下載影片
+            # 步驟 3: 下載影片
             logger.info("📥 下載影片...")
             await self._download_video(video_url, output_path)
 
@@ -217,8 +225,65 @@ class HeyGenService:
             logger.error(f"❌ Avatar Video 生成失敗: {e}")
             raise
 
+    async def _create_video_with_urls(self, image_url: str, audio_url: str) -> str:
+        """創建 Avatar Video 任務（使用公開 URL）"""
+        url = f"{self.base_url}/video/generate"
+        headers = {
+            "X-Api-Key": self.api_key,
+            "Content-Type": "application/json"
+        }
+
+        # 使用 URL 直接生成（不需要先上傳）
+        payload = {
+            "video_inputs": [
+                {
+                    "character": {
+                        "type": "photo_avatar",
+                        "photo_url": image_url  # 使用 photo_url 而不是 image_asset_id
+                    },
+                    "voice": {
+                        "type": "audio",
+                        "audio_url": audio_url  # 使用 audio_url 而不是 audio_asset_id
+                    },
+                    "background": {
+                        "type": "color",
+                        "value": "#FFFFFF"
+                    }
+                }
+            ],
+            "dimension": {
+                "width": 1280,
+                "height": 720
+            },
+            "test": False  # 正式生成（非測試模式）
+        }
+
+        logger.info(f"📤 發送視頻生成請求:")
+        logger.info(f"   圖片 URL: {image_url}")
+        logger.info(f"   音頻 URL: {audio_url}")
+
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(url, json=payload, headers=headers)
+
+            logger.info(f"📥 收到響應: Status {response.status_code}")
+            logger.info(f"📥 響應內容: {response.text}")
+
+            if not response.is_success:
+                logger.error(f"❌ HeyGen API 錯誤: {response.status_code} - {response.text}")
+
+            response.raise_for_status()
+
+            data = response.json()
+            video_id = data.get("data", {}).get("video_id")
+
+            if not video_id:
+                raise ValueError("未獲取到 Video ID")
+
+            logger.info(f"🎬 Video 任務創建: {video_id}")
+            return video_id
+
     async def _create_video(self, image_asset_id: str, audio_asset_id: str) -> str:
-        """創建 Avatar Video 任務（使用 Asset ID）"""
+        """創建 Avatar Video 任務（使用 Asset ID）- 舊方法，保留以供兼容"""
         url = f"{self.base_url}/video/generate"
         headers = {
             "X-Api-Key": self.api_key,
