@@ -163,7 +163,16 @@ def search_knowledge_base(query: str) -> str:
             max_obs_length = 1500
             if len(result) > max_obs_length:
                  result = result[:max_obs_length] + "... (內容過長截斷)"
-            return f"找到相關資料：\n{result}"
+
+            # 檢查並記錄是否還有大括號
+            if '{' in result or '}' in result:
+                logger.warning(f"⚠️ 清理後仍發現大括號！內容: {result[:200]}")
+
+            # 最終返回值也要完全轉義，避免 LangChain 再次格式化時出錯
+            final_result = result.replace("{", "").replace("}", "")
+            logger.debug(f"📤 返回內容前100字: {final_result[:100]}")
+
+            return f"找到相關資料：\n{final_result}"
         else:
             logger.warning(f"⚠️ 工具 [搜尋知識庫] 未找到資料 for query: {query}")
             return "知識庫中找不到與此直接相關的資料。"
