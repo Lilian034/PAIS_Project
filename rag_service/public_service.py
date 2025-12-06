@@ -150,8 +150,13 @@ def search_knowledge_base(query: str) -> str:
             # 只取 page_content，避免 metadata 過長
             result = "\n\n".join([doc.page_content for doc in docs])
             logger.info(f"✅ 工具 [搜尋知識庫] 找到 {len(docs)} 筆資料")
+
+            # 清理可能導致格式化問題的字符（特別是單獨的大括號）
+            # LangChain 會使用 .format() 處理 Prompt，單獨的 { 或 } 會導致錯誤
+            result = result.replace("{", "{{").replace("}", "}}")
+
             # 限制回傳給 Agent 的長度，避免 Prompt 過長
-            max_obs_length = 1500 
+            max_obs_length = 1500
             if len(result) > max_obs_length:
                  result = result[:max_obs_length] + "... (內容過長截斷)"
             return f"找到相關資料：\n{result}"
