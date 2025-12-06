@@ -37,13 +37,28 @@ class HeyGenService:
 
         def _sync_upload():
             """同步上傳函數（使用 requests）"""
+            # 檢查文件是否存在
+            audio_file = Path(audio_path)
+            if not audio_file.exists():
+                raise FileNotFoundError(f"音頻文件不存在: {audio_path}")
+
+            file_size = audio_file.stat().st_size
+            logger.info(f"📁 準備上傳音頻: {audio_file.name} (大小: {file_size} bytes)")
+
             url = f"{self.upload_url}/asset"
             headers = {"X-Api-Key": self.api_key}
 
+            logger.info(f"🌐 上傳 URL: {url}")
+            logger.info(f"🔑 API Key (前10字符): {self.api_key[:10]}...")
+
             # 使用 requests 上傳文件
             with open(audio_path, "rb") as f:
-                files = {"file": (Path(audio_path).name, f)}
+                files = {"file": (audio_file.name, f, "audio/mpeg")}
+                logger.info(f"📤 發送請求...")
                 response = requests.post(url, headers=headers, files=files, timeout=60.0)
+
+            logger.info(f"📥 收到響應: Status {response.status_code}")
+            logger.info(f"📥 響應內容: {response.text}")
 
             # 添加詳細的錯誤日誌
             if response.status_code != 200:
@@ -87,13 +102,37 @@ class HeyGenService:
 
         def _sync_upload():
             """同步上傳函數（使用 requests）"""
+            # 檢查文件是否存在
+            image_file = Path(image_path)
+            if not image_file.exists():
+                raise FileNotFoundError(f"圖片文件不存在: {image_path}")
+
+            file_size = image_file.stat().st_size
+            logger.info(f"📁 準備上傳圖片: {image_file.name} (大小: {file_size} bytes)")
+
+            # 根據文件擴展名設置正確的 MIME 類型
+            file_ext = image_file.suffix.lower()
+            mime_types = {
+                '.png': 'image/png',
+                '.jpg': 'image/jpeg',
+                '.jpeg': 'image/jpeg',
+                '.gif': 'image/gif',
+                '.webp': 'image/webp'
+            }
+            mime_type = mime_types.get(file_ext, 'image/jpeg')
+            logger.info(f"📋 MIME 類型: {mime_type}")
+
             url = f"{self.upload_url}/asset"
             headers = {"X-Api-Key": self.api_key}
 
             # 使用 requests 上傳文件
             with open(image_path, "rb") as f:
-                files = {"file": (Path(image_path).name, f)}
+                files = {"file": (image_file.name, f, mime_type)}
+                logger.info(f"📤 發送請求...")
                 response = requests.post(url, headers=headers, files=files, timeout=60.0)
+
+            logger.info(f"📥 收到響應: Status {response.status_code}")
+            logger.info(f"📥 響應內容: {response.text}")
 
             # 添加詳細的錯誤日誌
             if response.status_code != 200:
