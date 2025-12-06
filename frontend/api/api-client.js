@@ -85,8 +85,11 @@ class APIClient {
     static staff = {
         /**
          * 生成文案
+         * @param {string} topic - 文案主題
+         * @param {string} style - 文案類型 (press/speech/facebook/instagram/poster)
+         * @param {string} length - 文案長度 (short/medium/long)
          */
-        async generateContent(topic, style = 'formal', length = 'medium') {
+        async generateContent(topic, style = 'speech', length = 'medium') {
             try {
                 const data = await request(`${API_CONFIG.staffURL}/content/generate`, {
                     method: 'POST',
@@ -199,7 +202,7 @@ class APIClient {
         },
 
         /**
-         * 生成 Avatar Video（HeyGen）
+         * 生成 Avatar Video（HeyGen）- 使用任務音頻
          */
         async generateVideo(taskId, imagePath, prompt = null) {
             try {
@@ -212,6 +215,76 @@ class APIClient {
             } catch (error) {
                 return { success: false, error: error.message };
             }
+        },
+
+        /**
+         * 生成 Avatar Video（HeyGen）- 使用上傳的音頻
+         */
+        async generateVideoWithUploadedAudio(audioPath, imagePath, prompt = null) {
+            try {
+                const queryParams = `audio_path=${encodeURIComponent(audioPath)}&image_path=${encodeURIComponent(imagePath)}`;
+                const data = await request(`${API_CONFIG.staffURL}/media/avatar-video-upload?${queryParams}`, {
+                    method: 'POST',
+                    requireAuth: true
+                });
+                return { success: true, ...data };
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
+        },
+
+        /**
+         * 查詢媒體生成狀態
+         */
+        async getMediaStatus(taskId) {
+            try {
+                const data = await request(`${API_CONFIG.staffURL}/media/status/${taskId}`, {
+                    requireAuth: true
+                });
+                return { success: true, ...data };
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
+        },
+
+        /**
+         * 獲取可用的語音列表
+         */
+        async getVoices() {
+            try {
+                const data = await request(`${API_CONFIG.staffURL}/media/voices`, {
+                    requireAuth: true
+                });
+                return { success: true, ...data };
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
+        },
+
+        /**
+         * 獲取可用的 Avatar 列表
+         */
+        async getAvatars() {
+            try {
+                const data = await request(`${API_CONFIG.staffURL}/media/avatars`, {
+                    requireAuth: true
+                });
+                return { success: true, ...data };
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
+        },
+
+        /**
+         * 健康檢查（包含 API 配置狀態）
+         */
+        async healthCheck() {
+            try {
+                const data = await request(`${API_CONFIG.staffURL.replace('/api/staff', '')}/health`);
+                return { success: true, ...data };
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
         }
     };
 
@@ -220,7 +293,8 @@ class APIClient {
      */
     static documents = {
         /**
-         * 上傳文件
+         * 上傳媒體素材（音頻、圖片）
+         * 用於短影音生成，不加入知識庫
          */
         async upload(file, folder = '') {
             try {
@@ -231,7 +305,29 @@ class APIClient {
                 const data = await request(`${API_CONFIG.baseURL}/upload`, {
                     method: 'POST',
                     body: formData,
-                    requireAdminAuth: true
+                    requireAuth: true  // 使用幕僚密碼
+                });
+
+                return data.error ? { success: false, ...data } : { success: true, ...data };
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
+        },
+
+        /**
+         * 上傳政務文檔（PDF、DOCX等）
+         * 加入知識庫
+         */
+        async uploadDocument(file, folder = '') {
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                if (folder) formData.append('folder', folder);
+
+                const data = await request(`${API_CONFIG.baseURL}/documents/upload`, {
+                    method: 'POST',
+                    body: formData,
+                    requireAdminAuth: true  // 使用管理員密碼
                 });
 
                 return data.error ? { success: false, ...data } : { success: true, ...data };

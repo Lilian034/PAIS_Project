@@ -197,6 +197,11 @@ function generateMultimediaResponse(message) {
 // ==================== 事件綁定 ====================
 
 document.addEventListener('DOMContentLoaded', () => {
+  // 訪客計數（使用 sessionStorage 防止重複計數）
+  if (!sessionStorage.getItem('visitor_counted')) {
+    incrementVisitorCount();
+  }
+
   // 發送按鈕
   sendBtn.addEventListener('click', sendMessage);
   
@@ -239,5 +244,24 @@ async function checkBackendHealth() {
     console.log('✅ 後端健康狀態:', data);
   } catch (error) {
     console.warn('⚠️ 後端健康檢查失敗:', error);
+  }
+}
+
+// ==================== 訪客計數 ====================
+
+async function incrementVisitorCount() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/visitor/increment`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      sessionStorage.setItem('visitor_counted', 'true');
+      console.log('👥 訪客計數已記錄:', data);
+    }
+  } catch (error) {
+    console.warn('⚠️ 訪客計數失敗:', error);
   }
 }

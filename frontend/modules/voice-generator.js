@@ -105,7 +105,8 @@ async function handleVoiceGenerate() {
         showNotification('正在生成語音，請稍候...', 'info');
 
         // 步驟 1: 先創建文案任務（因為語音生成需要 task_id）
-        const contentResult = await APIClient.staff.generateContent(text, 'formal', 'short');
+        // 使用 'speech' 類型，因為語音適合口語化的演講風格
+        const contentResult = await APIClient.staff.generateContent(text, 'speech', 'short');
 
         if (!contentResult.success) {
             showNotification(`創建任務失敗: ${contentResult.error}`, 'error');

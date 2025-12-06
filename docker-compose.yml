@@ -44,6 +44,7 @@ services:
       - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
       - MAYOR_VOICE_ID=${MAYOR_VOICE_ID}
       - HEYGEN_API_KEY=${HEYGEN_API_KEY}
+      - SERVER_BASE_URL=${SERVER_BASE_URL:-http://localhost}
     depends_on:
       - qdrant
     restart: unless-stopped
@@ -66,6 +67,8 @@ services:
       - "80:80"
     volumes:
       - ./frontend:/usr/share/nginx/html
+      - ./generated_content:/usr/share/nginx/html/generated_content
+      - ./documents:/usr/share/nginx/html/documents
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - public_api

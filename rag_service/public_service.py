@@ -147,11 +147,20 @@ def search_knowledge_base(query: str) -> str:
         retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
         docs = retriever.invoke(query) # 使用 invoke
         if docs:
-            # 只取 page_content，避免 metadata 過長
-            result = "\n\n".join([doc.page_content for doc in docs])
+            # 處理每個文檔，移除所有可能導致格式化問題的字符
+            cleaned_contents = []
+            for doc in docs:
+                content = doc.page_content
+                # 移除所有大括號和其他特殊格式字符
+                content = content.replace("{", "").replace("}", "")
+                content = content.replace("{{", "").replace("}}", "")
+                cleaned_contents.append(content)
+
+            result = "\n\n".join(cleaned_contents)
             logger.info(f"✅ 工具 [搜尋知識庫] 找到 {len(docs)} 筆資料")
+
             # 限制回傳給 Agent 的長度，避免 Prompt 過長
-            max_obs_length = 1500 
+            max_obs_length = 1500
             if len(result) > max_obs_length:
                  result = result[:max_obs_length] + "... (內容過長截斷)"
             return f"找到相關資料：\n{result}"
@@ -169,6 +178,9 @@ def get_policy_info(policy_name: str) -> str:
         docs = vectorstore.similarity_search(policy_name, k=1) # 只取最相關的 1 筆
         if docs:
             result = docs[0].page_content
+            # 移除所有大括號，避免格式化問題
+            result = result.replace("{", "").replace("}", "")
+            result = result.replace("{{", "").replace("}}", "")
             logger.info(f"✅ 工具 [查詢政策] 找到資料 for policy: {policy_name}")
             # 限制回傳給 Agent 的長度
             max_obs_length = 1500
@@ -626,7 +638,7 @@ async def upload_file(
     folder: str = Form(""),
     admin: bool = Depends(verify_admin)
 ):
-    """單個檔案上傳並直接加入知識庫"""
+    """單個檔案上傳（文檔加入知識庫，圖片僅保存）"""
     try:
         # 建立上傳目標資料夾
         upload_folder = Path("documents")
@@ -644,6 +656,7 @@ async def upload_file(
 
         logger.info(f"📤 接收到檔案上傳: {file.filename}, 儲存至: {file_path}")
 
+        # 保存文件
         try:
             with open(file_path, "wb") as buffer:
                 content = await file.read()
@@ -653,12 +666,41 @@ async def upload_file(
              logger.error(f"❌ 儲存上傳檔案失敗 ({file.filename}): {save_err}", exc_info=True)
              raise HTTPException(status_code=500, detail=f"儲存檔案失敗: {save_err}")
 
-        logger.info(f"📚 開始處理單一檔案: {file_path}")
+        # 判斷文件類型
+        image_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg', '.ico'}
+        audio_extensions = {'.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac', '.wma'}
+        file_ext = file_path.suffix.lower()
+
+        # 如果是圖片文件，只保存不加入知識庫
+        if file_ext in image_extensions or folder == 'images':
+            logger.info(f"🖼️ 圖片文件已保存: {file_path}")
+            return {
+                "success": True,
+                "message": "圖片上傳成功",
+                "filename": file.filename,
+                "file_path": str(file_path),
+                "type": "image"
+            }
+
+        # 如果是音頻文件，只保存不加入知識庫
+        if file_ext in audio_extensions or folder == 'audio':
+            logger.info(f"🎵 音頻文件已保存: {file_path}")
+            return {
+                "success": True,
+                "message": "音頻上傳成功",
+                "filename": file.filename,
+                "file_path": str(file_path),
+                "type": "audio"
+            }
+
+        # 非圖片/音頻文件：加入知識庫
+        logger.info(f"📚 開始處理文檔: {file_path}")
         docs = load_document(str(file_path))
 
         if not docs:
             logger.warning(f"⚠️ 檔案 {file_path} 載入失敗或無內容，無法加入知識庫")
             return {
+                "success": False,
                 "message": "檔案已成功上傳，但無法讀取內容或內容為空，未加入知識庫。",
                 "filename": file.filename,
                 "chunks": 0,
@@ -692,6 +734,7 @@ async def upload_file(
         if not splits:
              logger.warning(f"⚠️ 檔案 {file_path.name} 分割後無片段，無法加入知識庫")
              return {
+                "success": False,
                 "message": "檔案已成功上傳，但分割後無有效內容，未加入知識庫。",
                 "filename": file.filename,
                 "chunks": 0,
@@ -702,8 +745,10 @@ async def upload_file(
             vectorstore.add_documents(splits)
             logger.info(f"✅ 檔案 {file_path.name} 的片段已成功加入向量資料庫")
             return {
+                "success": True,
                 "message": "✅ 檔案上傳並成功加入知識庫",
                 "filename": file.filename,
+                "file_path": str(file_path),
                 "chunks": total_chunks
             }
         except Exception as add_doc_err:
@@ -792,7 +837,7 @@ async def clear_memory(session_id: str, admin: bool = Depends(verify_admin)):
 
 @app.get("/api/documents")
 async def list_documents(admin: bool = Depends(verify_admin)):
-    """列出知識庫中的所有文檔"""
+    """列出知識庫中的所有文檔（排除素材文件）"""
     try:
         docs_dir = Path("documents")
         if not docs_dir.exists():
@@ -800,12 +845,22 @@ async def list_documents(admin: bool = Depends(verify_admin)):
 
         documents = []
 
+        # 排除的目錄（素材目錄）
+        excluded_dirs = {'audio', 'images'}
+
         # 遍歷所有文件（包括子目錄）
         for file_path in docs_dir.rglob("*"):
             if file_path.is_file():
                 try:
-                    stat_info = file_path.stat()
+                    # 檢查是否在排除的目錄中
                     relative_path = file_path.relative_to(docs_dir)
+                    path_parts = relative_path.parts
+
+                    # 如果第一層目錄是 audio 或 images，跳過
+                    if len(path_parts) > 0 and path_parts[0] in excluded_dirs:
+                        continue
+
+                    stat_info = file_path.stat()
 
                     documents.append({
                         "filename": file_path.name,
@@ -822,7 +877,7 @@ async def list_documents(admin: bool = Depends(verify_admin)):
         # 按上傳時間排序（新到舊）
         documents.sort(key=lambda x: x["uploaded_at"], reverse=True)
 
-        logger.info(f"📂 列出文檔列表，共 {len(documents)} 個文件")
+        logger.info(f"📂 列出文檔列表，共 {len(documents)} 個文件（已排除素材文件）")
         return {
             "documents": documents,
             "total": len(documents)

@@ -18,10 +18,16 @@ import { showNotification } from './utils/notification.js';
 // ==================== 全局變量 ====================
 
 let uploadedPhotoPaths = []; // 保存已上傳的照片路徑（供視頻生成使用）
+let uploadedAudioPath = null; // 保存已上傳的音頻路徑（供視頻生成使用）
 
 // ==================== 初始化 ====================
 
 document.addEventListener('DOMContentLoaded', () => {
+    // 檢查登錄狀態
+    if (!checkLogin()) {
+        return; // 未登錄，等待用戶輸入密碼
+    }
+
     // 初始化所有功能模組
     TabManager.init();
     DocumentManager.init();
@@ -38,6 +44,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
     console.log('✅ 幕僚系統已啟動');
 });
+
+/**
+ * 檢查登錄狀態
+ */
+function checkLogin() {
+    const password = localStorage.getItem('staff_password');
+
+    if (!password) {
+        // 提示用戶輸入密碼
+        const inputPassword = prompt('請輸入幕僚系統密碼：', 'admin123');
+
+        if (!inputPassword) {
+            alert('未輸入密碼，無法使用幕僚系統');
+            return false;
+        }
+
+        // 保存密碼
+        localStorage.setItem('staff_password', inputPassword);
+        alert('登錄成功！');
+        location.reload(); // 重新載入頁面
+        return false;
+    }
+
+    return true;
+}
 
 /**
  * 檢查 API 連接
@@ -178,52 +209,79 @@ async function handlePhotoUpload(files) {
 /**
  * 處理音頻上傳
  */
-function handleAudioUpload(files) {
+async function handleAudioUpload(files) {
     const audioBox = document.querySelector('#media .audio-single');
     if (!audioBox || !files || !files.length) return;
 
     const addBtn = audioBox.querySelector('.add-audio');
     const file = files[0];
-    const url = URL.createObjectURL(file);
 
-    if (addBtn) {
-        addBtn.classList.add('has-preview');
-        addBtn.innerHTML = '';
+    try {
+        showNotification('正在上傳音頻...', 'info');
 
-        const chip = document.createElement('div');
-        chip.className = 'audio-chip';
+        // 上傳音頻到服務器（使用 audio 資料夾）
+        const uploadResult = await APIClient.documents.upload(file, 'audio');
 
-        const playBtn = document.createElement('button');
-        playBtn.className = 'play';
-        playBtn.textContent = '▶︎ 播放';
+        if (!uploadResult.success) {
+            showNotification(`上傳音頻失敗: ${uploadResult.error}`, 'error');
+            return;
+        }
 
-        const name = document.createElement('span');
-        name.className = 'name';
-        name.textContent = file.name || '已選音檔';
+        // 保存上傳的音頻路徑
+        const audioPath = uploadResult.file_path || `documents/audio/${file.name}`;
+        uploadedAudioPath = audioPath;
 
-        const audio = new Audio(url);
-        let playing = false;
+        // 通知 VideoGenerator 模組
+        VideoGenerator.setUploadedAudioPath(audioPath);
 
-        playBtn.onclick = () => {
-            if (!playing) {
-                audio.play();
-                playing = true;
-                playBtn.textContent = '⏸ 暫停';
-            } else {
-                audio.pause();
+        showNotification('音頻上傳成功！', 'success');
+
+        // 前端顯示預覽
+        const url = URL.createObjectURL(file);
+
+        if (addBtn) {
+            addBtn.classList.add('has-preview');
+            addBtn.innerHTML = '';
+
+            const chip = document.createElement('div');
+            chip.className = 'audio-chip';
+
+            const playBtn = document.createElement('button');
+            playBtn.className = 'play';
+            playBtn.textContent = '▶︎ 播放';
+
+            const name = document.createElement('span');
+            name.className = 'name';
+            name.textContent = file.name || '已選音檔';
+
+            const audio = new Audio(url);
+            let playing = false;
+
+            playBtn.onclick = () => {
+                if (!playing) {
+                    audio.play();
+                    playing = true;
+                    playBtn.textContent = '⏸ 暫停';
+                } else {
+                    audio.pause();
+                    playing = false;
+                    playBtn.textContent = '▶︎ 播放';
+                }
+            };
+
+            audio.onended = () => {
                 playing = false;
                 playBtn.textContent = '▶︎ 播放';
-            }
-        };
+            };
 
-        audio.onended = () => {
-            playing = false;
-            playBtn.textContent = '▶︎ 播放';
-        };
+            chip.appendChild(playBtn);
+            chip.appendChild(name);
+            addBtn.appendChild(chip);
+        }
 
-        chip.appendChild(playBtn);
-        chip.appendChild(name);
-        addBtn.appendChild(chip);
+    } catch (error) {
+        console.error('❌ 上傳音頻錯誤:', error);
+        showNotification('上傳音頻失敗', 'error');
     }
 }
 

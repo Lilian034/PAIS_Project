@@ -13,6 +13,7 @@ let generatedVideoUrl = null; // 生成的影片 URL
 
 // 外部依賴變數（從其他模組傳入）
 let uploadedPhotoPaths = null;
+let uploadedAudioPath = null; // 上傳的音頻路徑
 let currentTaskId = null;
 let currentVoiceTaskId = null;
 
@@ -83,6 +84,15 @@ export function setUploadedPhotoPaths(paths) {
 }
 
 /**
+ * 設置上傳的音頻路徑（供外部調用）
+ * @param {string} path - 音頻路徑
+ * @export
+ */
+export function setUploadedAudioPath(path) {
+    uploadedAudioPath = path;
+}
+
+/**
  * 設置當前任務 ID（供其他模組調用）
  * @param {string} taskId - 任務 ID
  * @param {string} type - 任務類型 ('content' 或 'voice')
@@ -108,10 +118,10 @@ async function handleVideoGenerate() {
         return;
     }
 
-    // 檢查是否有任務ID（需要先生成語音）
+    // 檢查是否有音頻（上傳的或生成的）
     let taskId = currentTaskId || currentVoiceTaskId;
-    if (!taskId) {
-        showNotification('請先生成文案和語音！', 'warning');
+    if (!uploadedAudioPath && !taskId) {
+        showNotification('請先上傳音頻或生成語音！', 'warning');
         return;
     }
 
@@ -121,10 +131,20 @@ async function handleVideoGenerate() {
         // 使用第一張上傳的照片
         const imagePath = uploadedPhotoPaths[0];
 
-        currentVideoTaskId = taskId;
+        // 設置任務ID（如果有的話）
+        currentVideoTaskId = taskId || `upload_${Date.now()}`;
 
-        // 生成 Avatar Video（會說話的數位分身）
-        const videoResult = await APIClient.staff.generateVideo(taskId, imagePath);
+        let videoResult;
+
+        // 如果有上傳的音頻，直接使用上傳的音頻
+        if (uploadedAudioPath) {
+            console.log('🎵 使用上傳的音頻:', uploadedAudioPath);
+            videoResult = await APIClient.staff.generateVideoWithUploadedAudio(uploadedAudioPath, imagePath);
+        } else {
+            // 否則使用任務ID（從語音生成取得音頻）
+            console.log('🎵 使用任務語音:', taskId);
+            videoResult = await APIClient.staff.generateVideo(taskId, imagePath);
+        }
 
         if (!videoResult.success) {
             showNotification(`Avatar Video 生成失敗: ${videoResult.error}`, 'error');

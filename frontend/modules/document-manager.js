@@ -213,7 +213,7 @@ async function handleUpload(files) {
         const file = files[i];
 
         try {
-            const result = await APIClient.documents.upload(file);
+            const result = await APIClient.documents.uploadDocument(file);
 
             if (result.success) {
                 successCount++;
