@@ -171,15 +171,24 @@ def search_knowledge_base(query: str) -> str:
         return f"搜尋知識庫時發生錯誤: {str(e)}"
 
 def get_policy_info(policy_name: str) -> str:
-    """取得特定政策資訊工具"""
-    logger.info(f"🛠️ 使用工具 [查詢政策]，政策名稱: {policy_name}")
+    """取得特定政策资讯工具"""
+    logger.info(f"🛠️ 使用工具 [查询政策]，政策名称: {policy_name}")
     try:
-        docs = vectorstore.similarity_search(policy_name, k=1) # 只取最相關的 1 筆
+        docs = vectorstore.similarity_search(policy_name, k=1) # 只取最相关的 1 笔
         if docs:
             result = docs[0].page_content
+<<<<<<< HEAD
             # 轉義大括號，避免格式化問題
             result = result.replace("{", "((").replace("}", "))")
             logger.info(f"✅ 工具 [查詢政策] 找到資料 for policy: {policy_name}")
+=======
+            
+            # 清理可能导致格式化问题的字符
+            result = result.replace("{", "{{").replace("}", "}}")
+            
+            logger.info(f"✅ 工具 [查询政策] 找到资料 for policy: {policy_name}")
+
+>>>>>>> 99da256 (4)
             # 限制回傳給 Agent 的長度
             max_obs_length = 1500
             if len(result) > max_obs_length:
