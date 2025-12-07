@@ -7,7 +7,7 @@
 const API_CONFIG = {
     baseURL: '/api',
     staffURL: '/api/staff',
-    adminPassword: 'admin123456',
+    adminPassword: 'admin123456',  // 知識庫管理
     get staffPassword() {
         return localStorage.getItem('staff_password') || 'admin123';
     },
@@ -18,6 +18,9 @@ const API_CONFIG = {
 
 /**
  * 統一 HTTP 請求處理
+ * @param {string} url - 請求 URL
+ * @param {Object} options - 請求選項
+ * @returns {Promise<any>}
  */
 async function request(url, options = {}) {
     const {
@@ -30,10 +33,12 @@ async function request(url, options = {}) {
 
     const headers = {};
 
+    // 設置 Content-Type
     if (contentType && !(body instanceof FormData)) {
         headers['Content-Type'] = contentType;
     }
 
+    // 設置授權
     if (requireAdminAuth) {
         headers['Authorization'] = `Bearer ${API_CONFIG.adminPassword}`;
     } else if (requireAuth) {
@@ -43,15 +48,22 @@ async function request(url, options = {}) {
     try {
         const fetchOptions = { method, headers };
 
+        // 設置請求體
         if (body) {
             fetchOptions.body = body instanceof FormData ? body : JSON.stringify(body);
         }
 
         const response = await fetch(url, fetchOptions);
 
+        // 處理錯誤狀態
         if (!response.ok) {
-            if (response.status === 401) throw new Error('密碼錯誤或未授權');
-            if (response.status === 404) throw new Error('資源不存在');
+            if (response.status === 401) {
+                throw new Error('密碼錯誤或未授權');
+            }
+            if (response.status === 404) {
+                throw new Error('資源不存在');
+            }
+
             const errorData = await response.json().catch(() => ({}));
             throw new Error(errorData.detail || `請求失敗 (${response.status})`);
         }
@@ -67,9 +79,15 @@ async function request(url, options = {}) {
  * API 客戶端類
  */
 class APIClient {
+    /**
+     * 幕僚系統 API
+     */
     static staff = {
         /**
-         * 生成文案 (AI 生成模式)
+         * 生成文案
+         * @param {string} topic - 文案主題
+         * @param {string} style - 文案類型 (press/speech/facebook/instagram/poster)
+         * @param {string} length - 文案長度 (short/medium/long)
          */
         async generateContent(topic, style = 'speech', length = 'medium') {
             try {
@@ -85,26 +103,8 @@ class APIClient {
         },
 
         /**
-         * 【新增】直接建立內容 (不經 AI 生成)
-         * 專門給語音生成使用，確保照稿念
+         * 校稿
          */
-        async createDirectContent(content) {
-            try {
-                const data = await request(`${API_CONFIG.staffURL}/content/direct`, {
-                    method: 'POST',
-                    body: { 
-                        topic: content,  // 將原文放入 topic 欄位
-                        style: 'speech',
-                        length: 'medium'
-                    },
-                    requireAuth: true
-                });
-                return { success: true, ...data };
-            } catch (error) {
-                return { success: false, error: error.message };
-            }
-        },
-
         async proofread(text, sessionId = null, isFirstMessage = false) {
             try {
                 const message = isFirstMessage
@@ -127,6 +127,9 @@ class APIClient {
             }
         },
 
+        /**
+         * 獲取任務列表
+         */
         async getTasks(limit = 50) {
             try {
                 const data = await request(`${API_CONFIG.staffURL}/content/tasks?limit=${limit}`, {
@@ -138,6 +141,9 @@ class APIClient {
             }
         },
 
+        /**
+         * 獲取單個任務
+         */
         async getTask(taskId) {
             try {
                 const data = await request(`${API_CONFIG.staffURL}/content/task/${taskId}`, {
@@ -149,6 +155,9 @@ class APIClient {
             }
         },
 
+        /**
+         * 更新任務
+         */
         async updateTask(taskId, content, editor = 'admin') {
             try {
                 const data = await request(`${API_CONFIG.staffURL}/content/task/${taskId}`, {
@@ -162,6 +171,9 @@ class APIClient {
             }
         },
 
+        /**
+         * 審核通過任務
+         */
         async approveTask(taskId) {
             try {
                 const data = await request(`${API_CONFIG.staffURL}/content/task/${taskId}/approve`, {
@@ -174,6 +186,9 @@ class APIClient {
             }
         },
 
+        /**
+         * 生成語音
+         */
         async generateVoice(taskId) {
             try {
                 const data = await request(`${API_CONFIG.staffURL}/media/voice/${taskId}`, {
@@ -186,6 +201,9 @@ class APIClient {
             }
         },
 
+        /**
+         * 生成 Avatar Video（HeyGen）- 使用任務音頻
+         */
         async generateVideo(taskId, imagePath, prompt = null) {
             try {
                 const queryParams = `image_path=${encodeURIComponent(imagePath)}`;
@@ -199,6 +217,9 @@ class APIClient {
             }
         },
 
+        /**
+         * 生成 Avatar Video（HeyGen）- 使用上傳的音頻
+         */
         async generateVideoWithUploadedAudio(audioPath, imagePath, prompt = null) {
             try {
                 const queryParams = `audio_path=${encodeURIComponent(audioPath)}&image_path=${encodeURIComponent(imagePath)}`;
@@ -212,6 +233,9 @@ class APIClient {
             }
         },
 
+        /**
+         * 查詢媒體生成狀態
+         */
         async getMediaStatus(taskId) {
             try {
                 const data = await request(`${API_CONFIG.staffURL}/media/status/${taskId}`, {
@@ -223,6 +247,9 @@ class APIClient {
             }
         },
 
+        /**
+         * 獲取可用的語音列表
+         */
         async getVoices() {
             try {
                 const data = await request(`${API_CONFIG.staffURL}/media/voices`, {
@@ -234,6 +261,9 @@ class APIClient {
             }
         },
 
+        /**
+         * 獲取可用的 Avatar 列表
+         */
         async getAvatars() {
             try {
                 const data = await request(`${API_CONFIG.staffURL}/media/avatars`, {
@@ -245,6 +275,9 @@ class APIClient {
             }
         },
 
+        /**
+         * 健康檢查（包含 API 配置狀態）
+         */
         async healthCheck() {
             try {
                 const data = await request(`${API_CONFIG.staffURL.replace('/api/staff', '')}/health`);
@@ -255,7 +288,14 @@ class APIClient {
         }
     };
 
+    /**
+     * 知識庫管理 API
+     */
     static documents = {
+        /**
+         * 上傳媒體素材（音頻、圖片）
+         * 用於短影音生成，不加入知識庫
+         */
         async upload(file, folder = '') {
             try {
                 const formData = new FormData();
@@ -265,14 +305,19 @@ class APIClient {
                 const data = await request(`${API_CONFIG.baseURL}/upload`, {
                     method: 'POST',
                     body: formData,
-                    requireAuth: true
+                    requireAuth: true  // 使用幕僚密碼
                 });
+
                 return data.error ? { success: false, ...data } : { success: true, ...data };
             } catch (error) {
                 return { success: false, error: error.message };
             }
         },
 
+        /**
+         * 上傳政務文檔（PDF、DOCX等）
+         * 加入知識庫
+         */
         async uploadDocument(file, folder = '') {
             try {
                 const formData = new FormData();
@@ -282,14 +327,18 @@ class APIClient {
                 const data = await request(`${API_CONFIG.baseURL}/documents/upload`, {
                     method: 'POST',
                     body: formData,
-                    requireAdminAuth: true
+                    requireAdminAuth: true  // 使用管理員密碼
                 });
+
                 return data.error ? { success: false, ...data } : { success: true, ...data };
             } catch (error) {
                 return { success: false, error: error.message };
             }
         },
 
+        /**
+         * 批次處理文檔
+         */
         async ingest(folderPath = 'documents') {
             try {
                 const data = await request(`${API_CONFIG.baseURL}/ingest`, {
@@ -303,9 +352,12 @@ class APIClient {
             }
         },
 
-        async list() {
+        /**
+         * 列出文檔
+         */
+        async list(sort = 'newest') {
             try {
-                const data = await request(`${API_CONFIG.baseURL}/documents`, {
+                const data = await request(`${API_CONFIG.baseURL}/documents?sort=${sort}`, {
                     requireAdminAuth: true
                 });
                 return {
@@ -314,10 +366,18 @@ class APIClient {
                     total: data.total || 0
                 };
             } catch (error) {
-                return { success: false, error: error.message, documents: [], total: 0 };
+                return {
+                    success: false,
+                    error: error.message,
+                    documents: [],
+                    total: 0
+                };
             }
         },
 
+        /**
+         * 刪除文檔
+         */
         async delete(filePath) {
             try {
                 const data = await request(`${API_CONFIG.baseURL}/documents/${encodeURIComponent(filePath)}`, {
@@ -331,7 +391,13 @@ class APIClient {
         }
     };
 
+    /**
+     * 系統監控 API
+     */
     static system = {
+        /**
+         * 獲取統計信息
+         */
         async getStats() {
             try {
                 return await request(`${API_CONFIG.baseURL}/stats`);
@@ -339,6 +405,10 @@ class APIClient {
                 return null;
             }
         },
+
+        /**
+         * 健康檢查
+         */
         async healthCheck() {
             try {
                 return await request(`${API_CONFIG.baseURL}/health`);
@@ -346,6 +416,10 @@ class APIClient {
                 return { status: 'error' };
             }
         },
+
+        /**
+         * 幕僚系統健康檢查
+         */
         async staffHealthCheck() {
             try {
                 return await request(`/api/staff-health`);
@@ -355,7 +429,13 @@ class APIClient {
         }
     };
 
+    /**
+     * 訪客統計 API
+     */
     static visitor = {
+        /**
+         * 獲取訪客統計
+         */
         async getStats(month = null) {
             try {
                 const url = month
@@ -367,6 +447,10 @@ class APIClient {
                 return { success: false, error: error.message };
             }
         },
+
+        /**
+         * 增加訪客計數
+         */
         async increment() {
             try {
                 const data = await request(`${API_CONFIG.baseURL}/visitor/increment`, {
@@ -378,6 +462,10 @@ class APIClient {
                 return { success: false, error: error.message };
             }
         },
+
+        /**
+         * 獲取總訪客數
+         */
         async getTotal() {
             try {
                 const data = await request(`${API_CONFIG.baseURL}/visitor/stats`);
@@ -393,18 +481,26 @@ class APIClient {
         }
     };
 
+    /**
+     * 設置幕僚密碼
+     */
     static setStaffPassword(password) {
         API_CONFIG.staffPassword = password;
     }
+
+    /**
+     * 獲取幕僚密碼
+     */
     static getStaffPassword() {
         return API_CONFIG.staffPassword;
     }
 }
 
+// 導出 API 客戶端
 export default APIClient;
 
+// 向後兼容：導出舊的函數名稱
 export const generateStaffContent = APIClient.staff.generateContent.bind(APIClient.staff);
-export const createDirectContent = APIClient.staff.createDirectContent.bind(APIClient.staff);
 export const proofreadContent = APIClient.staff.proofread.bind(APIClient.staff);
 export const getTasks = APIClient.staff.getTasks.bind(APIClient.staff);
 export const getTask = APIClient.staff.getTask.bind(APIClient.staff);

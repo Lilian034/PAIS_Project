@@ -88,7 +88,7 @@ function initSort() {
 
     sortSelect.addEventListener('change', (e) => {
         documentSortMode = e.target.value;
-        renderDocumentsList(filteredDocuments);
+        loadDocuments();
     });
 }
 
@@ -113,7 +113,7 @@ async function loadDocuments() {
     removeClass(emptyState, 'hidden');
 
     try {
-        const result = await APIClient.documents.list();
+        const result = await APIClient.documents.list(documentSortMode);
 
         if (!result.success) {
             throw new Error(result.error || '未知錯誤');
@@ -425,7 +425,7 @@ async function loadFolders() {
             }
         });
 
-        const folderList = $('#folderList');
+        const folderList = $('#uploadFolder');
         if (folderList && folders.size > 0) {
             folderList.innerHTML = Array.from(folders).sort()
                 .map(folder => `
