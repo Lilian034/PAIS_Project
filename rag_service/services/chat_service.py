@@ -204,9 +204,12 @@ class ChatService:
                 f"❌ AgentExecutor 執行失敗 ({session_id}): {str(e)}",
                 exc_info=True
             )
-            return self._build_error_response(
-                session_id, role, error=e, include_error_detail=True
-            )
+            # 檢查是否為API配額錯誤
+            error_msg = str(e)
+            if "429" in error_msg or "quota" in error_msg.lower() or "rate limit" in error_msg.lower():
+                raise Exception(f"API 配額已用盡，請稍後再試或更新 API Key: {error_msg}")
+            # 其他錯誤也拋出，不要返回成功響應
+            raise e
 
     async def _handle_rag_mode(
         self,

@@ -153,6 +153,12 @@ async def generate_avatar_video(task_id: str, image_path: str, auth: bool = Depe
         
         task_mgr.complete_media(media_id, video_path)
         task_mgr.update_status(task_id, TaskStatus.COMPLETED)
+        logger.info(f"✅ [影片生成完成] task_id={task_id}, media_id={media_id}, file_path={video_path}")
+
+        # 驗證media_record是否正確更新
+        updated_records = db.get_media_records(task_id)
+        logger.info(f"📋 [驗證] task_id={task_id} 的所有 media_records: {updated_records}")
+
         return {"success": True, "task_id": task_id, "media_type": "video", "file_path": video_path, "message": "Video Ready"}
     except Exception as e:
         logger.error(f"Video failed: {e}")
@@ -163,7 +169,10 @@ async def generate_avatar_video(task_id: str, image_path: str, auth: bool = Depe
 @app.post("/api/staff/media/video/{task_id}", response_model=MediaResponse)
 async def generate_video_alias(task_id: str, image_path: str, auth: bool = Depends(verify_password)):
     """別名路由：為了相容前端的 /media/video 調用"""
-    return await generate_avatar_video(task_id, image_path, auth)
+    logger.info(f"🔗 [別名路由] 收到請求: /media/video/{task_id}, image_path={image_path}")
+    result = await generate_avatar_video(task_id, image_path, auth)
+    logger.info(f"🔗 [別名路由] 返回結果: {result}")
+    return result
 
 # === 【關鍵修改】使用背景任務處理 HeyGen 生成 ===
 @app.post("/api/staff/media/avatar-video-upload", response_model=MediaResponse)
@@ -236,10 +245,15 @@ async def upload_file(file: UploadFile = File(...), folder: str = Form(""), auth
 @app.get("/api/staff/media/status/{task_id}")
 async def get_media_status(task_id: str, auth: bool = Depends(verify_password)):
     task = task_mgr.get_task(task_id)
+    records = db.get_media_records(task_id)
+    logger.info(f"🔍 [狀態查詢] task_id={task_id}, task_status={task['status'] if task else 'unknown'}, records_count={len(records) if records else 0}")
+    if records:
+        for r in records:
+            logger.info(f"  └─ record: media_type={r.get('media_type')}, status={r.get('status')}, file_path={r.get('file_path')}")
     return {
-        "success": True, 
-        "task_status": task['status'] if task else "unknown", 
-        "media_records": db.get_media_records(task_id)
+        "success": True,
+        "task_status": task['status'] if task else "unknown",
+        "media_records": records
     }
 
 @app.get("/api/staff/media/voices")
