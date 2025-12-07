@@ -159,6 +159,12 @@ async def generate_avatar_video(task_id: str, image_path: str, auth: bool = Depe
         task_mgr.update_status(task_id, TaskStatus.FAILED)
         raise HTTPException(500, str(e))
 
+# 別名路由：相容舊的 /media/video 調用
+@app.post("/api/staff/media/video/{task_id}", response_model=MediaResponse)
+async def generate_video_alias(task_id: str, image_path: str, auth: bool = Depends(verify_password)):
+    """別名路由：為了相容前端的 /media/video 調用"""
+    return await generate_avatar_video(task_id, image_path, auth)
+
 # === 【關鍵修改】使用背景任務處理 HeyGen 生成 ===
 @app.post("/api/staff/media/avatar-video-upload", response_model=MediaResponse)
 async def generate_avatar_video_upload(
