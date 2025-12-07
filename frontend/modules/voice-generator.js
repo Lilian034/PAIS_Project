@@ -14,10 +14,6 @@ let generatedAudioUrl = null; // 生成的音頻 URL
 
 // ==================== 公開函數 ====================
 
-/**
- * 初始化語音生成功能
- * @export
- */
 export function init() {
     const generateBtn = $('#btnGoGenerate');
     const saveBtn = $('#btnSaveAudio');
@@ -42,47 +38,27 @@ export function init() {
         });
     });
 
-    // 綁定「＋新增音檔」按鈕
     if (btnVoiceUpload) {
         btnVoiceUpload.addEventListener('click', openAudioAddModal);
     }
 
-    // 初始化新增音檔彈窗
     initAudioAddModal();
 
     console.log('✅ 語音生成已初始化');
 }
 
-/**
- * 生成語音
- * @export
- */
 export async function generate() {
     await handleVoiceGenerate();
 }
 
-/**
- * 保存音頻文件
- * @export
- */
 export function save() {
     saveAudioFile();
 }
 
-/**
- * 獲取當前語音任務 ID
- * @returns {string|null}
- * @export
- */
 export function getCurrentTaskId() {
     return currentVoiceTaskId;
 }
 
-/**
- * 獲取生成的音頻 URL
- * @returns {string|null}
- * @export
- */
 export function getAudioUrl() {
     return generatedAudioUrl;
 }
@@ -90,7 +66,7 @@ export function getAudioUrl() {
 // ==================== 私有函數 ====================
 
 /**
- * 處理語音生成
+ * 處理語音生成 (強制照稿唸模式)
  */
 async function handleVoiceGenerate() {
     const voicePrompt = $('#voicePrompt');
@@ -102,29 +78,22 @@ async function handleVoiceGenerate() {
     }
 
     try {
-        showNotification('正在生成語音，請稍候...', 'info');
+        showNotification('正在處理語音內容...', 'info');
 
-        // 步驟 1: 先創建文案任務（因為語音生成需要 task_id）
-        // 使用 'speech' 類型，因為語音適合口語化的演講風格
-        const contentResult = await APIClient.staff.generateContent(text, 'speech', 'short');
+        // 【關鍵修改】使用直接輸入模式 (createDirectContent)
+        // 這會跳過 AI 文案生成，直接把您的文字存檔
+        const contentResult = await APIClient.staff.createDirectContent(text);
 
         if (!contentResult.success) {
-            showNotification(`創建任務失敗: ${contentResult.error}`, 'error');
+            showNotification(`建立任務失敗: ${contentResult.error}`, 'error');
             return;
         }
 
         const taskId = contentResult.task_id;
         currentVoiceTaskId = taskId;
 
-        // 步驟 2: 審核通過任務（語音生成需要已審核的任務）
-        const approveResult = await APIClient.staff.approveTask(taskId);
-
-        if (!approveResult.success) {
-            showNotification(`審核任務失敗: ${approveResult.error}`, 'error');
-            return;
-        }
-
-        // 步驟 3: 生成語音
+        // 生成語音
+        showNotification('正在合成語音 (ElevenLabs)...', 'info');
         const voiceResult = await APIClient.staff.generateVoice(taskId);
 
         if (!voiceResult.success) {
@@ -134,7 +103,7 @@ async function handleVoiceGenerate() {
 
         // 成功生成語音
         const audioPath = voiceResult.file_path;
-        generatedAudioUrl = `/${audioPath}`; // 構建音頻URL
+        generatedAudioUrl = `/${audioPath}`; 
 
         showNotification(`語音生成成功！任務ID: ${taskId}`, 'success');
 
@@ -147,20 +116,13 @@ async function handleVoiceGenerate() {
     }
 }
 
-/**
- * 顯示音頻播放器
- * @param {string} audioUrl - 音頻 URL
- */
 function displayAudioPlayer(audioUrl) {
     const voiceSection = document.querySelector('#voice .voice-settings');
-
-    // 移除舊的播放器
     const oldPlayer = voiceSection?.querySelector('.audio-player-container');
     if (oldPlayer) {
         oldPlayer.remove();
     }
 
-    // 創建新的播放器
     const playerDiv = document.createElement('div');
     playerDiv.className = 'audio-player-container';
     playerDiv.style.cssText = `
@@ -185,9 +147,6 @@ function displayAudioPlayer(audioUrl) {
     voiceSection?.appendChild(playerDiv);
 }
 
-/**
- * 初始化新增音檔彈窗
- */
 function initAudioAddModal() {
     const addChooseBtn = $('#addChooseBtn');
     const addAudioInput = $('#addAudioInput');
@@ -196,12 +155,10 @@ function initAudioAddModal() {
 
     if (!addChooseBtn || !addAudioInput) return;
 
-    // 點擊「選擇檔案」按鈕
     addChooseBtn.addEventListener('click', () => {
         addAudioInput.click();
     });
 
-    // 選擇檔案後顯示檔名
     addAudioInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file) {
@@ -209,12 +166,10 @@ function initAudioAddModal() {
         }
     });
 
-    // 關閉彈窗
     if (addBtnClose) {
         addBtnClose.addEventListener('click', closeAudioAddModal);
     }
 
-    // 新增音檔
     if (addBtnCreate) {
         addBtnCreate.addEventListener('click', () => {
             const file = addAudioInput.files[0];
@@ -231,16 +186,12 @@ function initAudioAddModal() {
                 return;
             }
 
-            // 這裡可以加入實際的新增邏輯
             showNotification(`已新增音檔: ${file.name}`, 'success');
             closeAudioAddModal();
         });
     }
 }
 
-/**
- * 打開新增音檔彈窗
- */
 function openAudioAddModal() {
     const modal = $('#audioAddModal');
     if (modal) {
@@ -250,9 +201,6 @@ function openAudioAddModal() {
     document.body.classList.add('no-scroll');
 }
 
-/**
- * 關閉新增音檔彈窗
- */
 function closeAudioAddModal() {
     const modal = $('#audioAddModal');
     if (modal) {
@@ -261,7 +209,6 @@ function closeAudioAddModal() {
     }
     document.body.classList.remove('no-scroll');
 
-    // 重置表單
     const addChooseBtn = $('#addChooseBtn');
     const addAudioInput = $('#addAudioInput');
     const addEmotion = $('#addEmotion');
@@ -273,9 +220,6 @@ function closeAudioAddModal() {
     if (addSource) addSource.value = '';
 }
 
-/**
- * 保存音頻文件
- */
 function saveAudioFile() {
     if (!generatedAudioUrl) {
         showNotification('請先生成語音', 'warning');
@@ -283,7 +227,6 @@ function saveAudioFile() {
     }
 
     try {
-        // 創建下載鏈接
         const a = document.createElement('a');
         a.href = generatedAudioUrl;
         a.download = `voice_${currentVoiceTaskId || Date.now()}.mp3`;
@@ -298,8 +241,6 @@ function saveAudioFile() {
         showNotification(`保存音檔失敗: ${error.message}`, 'error');
     }
 }
-
-// ==================== 全局導出（供 HTML 內聯事件使用） ====================
 
 if (typeof window !== 'undefined') {
     window.voiceGenerator = {

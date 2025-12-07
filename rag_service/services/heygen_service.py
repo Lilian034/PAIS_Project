@@ -1,405 +1,231 @@
-"""
-HeyGen Avatar Video 服務
-遵循 Single Responsibility Principle：專注於數位分身影片生成
-"""
 import os
-from pathlib import Path
-from typing import Optional
-import httpx
-import requests  # 用於文件上傳（同步）
 import asyncio
+import httpx
+import mimetypes
+from pathlib import Path
 from loguru import logger
 
-
 class HeyGenService:
-    """HeyGen 數位分身影片服務"""
+    """
+    HeyGen Avatar Video 服務 (Talking Photo 最終修正版)
+    修正生成類型並增加等待時間，確保 ID 可用
+    """
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: str = None):
         self.api_key = api_key or os.getenv("HEYGEN_API_KEY")
         self.base_url = "https://api.heygen.com/v2"
-        self.upload_url = "https://upload.heygen.com/v1"  # 文件上传使用不同的 URL
-
+        self.upload_url = "https://upload.heygen.com/v1/asset"
+        
         if not self.api_key:
             logger.warning("⚠️ HEYGEN_API_KEY 未設定")
 
-    async def upload_audio(self, audio_path: str) -> str:
-        """
-        上傳音頻到 HeyGen（使用 Upload Asset API）
-
-        Args:
-            audio_path: 音頻文件路徑
-
-        Returns:
-            音頻 Asset ID
-        """
+    async def generate_avatar_video(self, audio_path: str, image_path: str, task_id: str, base_url: str = None) -> str:
         if not self.api_key:
             raise ValueError("HeyGen API Key 未設定")
 
-        def _sync_upload():
-            """同步上傳函數（使用 requests）"""
-            # 檢查文件是否存在
-            audio_file = Path(audio_path)
-            if not audio_file.exists():
-                raise FileNotFoundError(f"音頻文件不存在: {audio_path}")
+        logger.info(f"🎬 [HeyGen] 開始處理任務: {task_id}")
+        return await self._generate_via_upload(audio_path, image_path, task_id)
 
-            file_size = audio_file.stat().st_size
-            logger.info(f"📁 準備上傳音頻: {audio_file.name} (大小: {file_size} bytes)")
-
-            url = f"{self.upload_url}/asset"
-            headers = {"X-Api-Key": self.api_key}
-
-            logger.info(f"🌐 上傳 URL: {url}")
-            logger.info(f"🔑 API Key (前10字符): {self.api_key[:10]}...")
-
-            # 使用 requests 上傳文件
-            with open(audio_path, "rb") as f:
-                files = {"file": (audio_file.name, f, "audio/mpeg")}
-                logger.info(f"📤 發送請求...")
-                response = requests.post(url, headers=headers, files=files, timeout=60.0)
-
-            logger.info(f"📥 收到響應: Status {response.status_code}")
-            logger.info(f"📥 響應內容: {response.text}")
-
-            # 添加詳細的錯誤日誌
-            if response.status_code != 200:
-                error_detail = response.text
-                logger.error(f"❌ HeyGen API 錯誤: {response.status_code} - {error_detail}")
-                response.raise_for_status()
-
-            data = response.json()
-            return data
+    async def _generate_via_upload(self, audio_path: str, image_path: str, task_id: str) -> str:
+        output_path = Path("generated_content/videos") / f"{task_id}.mp4"
+        output_path.parent.mkdir(parents=True, exist_ok=True)
 
         try:
-            # 在線程池中執行同步操作
-            data = await asyncio.to_thread(_sync_upload)
+            # 1. 上傳素材
+            logger.info("📤 步驟 1/4: 上傳音頻...")
+            audio_data = await self._upload_asset(audio_path, "audio")
+            audio_asset_id = audio_data["id"]
+            logger.info(f"✅ 音頻上傳完成 (ID: {audio_asset_id})")
 
-            # Upload Asset API 返回 asset_id 而不是 URL
-            asset_id = data.get("data", {}).get("asset_id")
+            logger.info("📤 步驟 2/4: 上傳圖片...")
+            image_data = await self._upload_asset(image_path, "image")
+            image_key = image_data.get("image_key") or image_data["id"]
+            logger.info(f"✅ 圖片上傳完成 (Key: {image_key})")
 
-            if not asset_id:
-                logger.error(f"❌ API 響應無 asset_id: {data}")
-                raise ValueError("未獲取到音頻 Asset ID")
+            # 2. 註冊 Photo Avatar
+            logger.info("🖼️ 步驟 3/4: 註冊 Photo Avatar...")
+            avatar_id = await self._create_photo_avatar(image_key, f"Avatar_{task_id}")
+            logger.info(f"✅ Avatar 註冊成功 (ID: {avatar_id})")
 
-            logger.info(f"📤 音頻上傳成功: {asset_id}")
-            return asset_id
+            logger.info("⏳ 等待 5 秒讓 Avatar 生效...")
+            await asyncio.sleep(5)
 
-        except Exception as e:
-            logger.error(f"❌ 音頻上傳失敗: {e}")
-            raise
-
-    async def upload_image(self, image_path: str) -> str:
-        """
-        上傳圖片到 HeyGen（使用 Upload Asset API）
-
-        Args:
-            image_path: 圖片路徑
-
-        Returns:
-            Image Asset ID
-        """
-        if not self.api_key:
-            raise ValueError("HeyGen API Key 未設定")
-
-        def _sync_upload():
-            """同步上傳函數（使用 requests）"""
-            # 檢查文件是否存在
-            image_file = Path(image_path)
-            if not image_file.exists():
-                raise FileNotFoundError(f"圖片文件不存在: {image_path}")
-
-            file_size = image_file.stat().st_size
-            logger.info(f"📁 準備上傳圖片: {image_file.name} (大小: {file_size} bytes)")
-
-            # 根據文件擴展名設置正確的 MIME 類型
-            file_ext = image_file.suffix.lower()
-            mime_types = {
-                '.png': 'image/png',
-                '.jpg': 'image/jpeg',
-                '.jpeg': 'image/jpeg',
-                '.gif': 'image/gif',
-                '.webp': 'image/webp'
-            }
-            mime_type = mime_types.get(file_ext, 'image/jpeg')
-            logger.info(f"📋 MIME 類型: {mime_type}")
-
-            url = f"{self.upload_url}/asset"
-            headers = {"X-Api-Key": self.api_key}
-
-            # 使用 requests 上傳文件
-            with open(image_path, "rb") as f:
-                files = {"file": (image_file.name, f, mime_type)}
-                logger.info(f"📤 發送請求...")
-                response = requests.post(url, headers=headers, files=files, timeout=60.0)
-
-            logger.info(f"📥 收到響應: Status {response.status_code}")
-            logger.info(f"📥 響應內容: {response.text}")
-
-            # 添加詳細的錯誤日誌
-            if response.status_code != 200:
-                error_detail = response.text
-                logger.error(f"❌ HeyGen API 錯誤: {response.status_code} - {error_detail}")
-                response.raise_for_status()
-
-            data = response.json()
-            return data
-
-        try:
-            # 在線程池中執行同步操作
-            data = await asyncio.to_thread(_sync_upload)
-
-            # Upload Asset API 返回 asset_id 而不是 URL
-            asset_id = data.get("data", {}).get("asset_id")
-
-            if not asset_id:
-                logger.error(f"❌ API 響應無 asset_id: {data}")
-                raise ValueError("未獲取到圖片 Asset ID")
-
-            logger.info(f"📸 圖片上傳成功: {asset_id}")
-            return asset_id
-
-        except Exception as e:
-            logger.error(f"❌ 圖片上傳失敗: {e}")
-            raise
-
-    async def generate_avatar_video(
-        self,
-        audio_path: str,
-        image_path: str,
-        task_id: str,
-        output_dir: str = "generated_content/videos",
-        base_url: str = None
-    ) -> str:
-        """
-        生成 Avatar Video（會說話的數位分身）
-        使用直接 URL 方式，不需要先上傳文件
-
-        Args:
-            audio_path: 音頻文件路徑
-            image_path: 圖片路徑
-            task_id: 任務 ID
-            output_dir: 輸出目錄
-            base_url: 服務器基礎 URL（用於構建公開可訪問的 URL）
-
-        Returns:
-            生成的影片路徑
-        """
-        if not self.api_key:
-            raise ValueError("HeyGen API Key 未設定")
-
-        try:
-            # 準備輸出路徑
-            output_path = Path(output_dir) / f"{task_id}.mp4"
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-
-            logger.info(f"🎬 開始生成 Avatar Video: {task_id}")
-
-            # 獲取服務器基礎 URL（從環境變量或參數）
-            if not base_url:
-                base_url = os.getenv("SERVER_BASE_URL", "http://localhost")
-
-            # 構建公開可訪問的 URL（HeyGen 可以直接訪問）
-            # audio_path 例如: documents/audio/voice_123.mp3
-            # 轉換為: http://localhost/documents/audio/voice_123.mp3
-            audio_url = f"{base_url}/{audio_path}"
-            image_url = f"{base_url}/{image_path}"
-
-            logger.info(f"🎵 音頻 URL: {audio_url}")
-            logger.info(f"📸 圖片 URL: {image_url}")
-
-            # 步驟 1: 創建 Avatar Video（使用 URL 直接生成）
-            logger.info("🎥 創建 Avatar Video...")
-            video_id = await self._create_video_with_urls(image_url, audio_url)
-
-            # 步驟 2: 輪詢狀態
-            logger.info("⏳ 等待影片生成...")
-            video_url = await self._poll_video_status(video_id)
-
-            # 步驟 3: 下載影片
-            logger.info("📥 下載影片...")
-            await self._download_video(video_url, output_path)
-
-            logger.info(f"✅ Avatar Video 生成完成: {output_path}")
-            return str(output_path)
-
-        except Exception as e:
-            logger.error(f"❌ Avatar Video 生成失敗: {e}")
-            raise
-
-    async def _create_video_with_urls(self, image_url: str, audio_url: str) -> str:
-        """創建 Avatar Video 任務（使用公開 URL）"""
-        url = f"{self.base_url}/video/generate"
-        headers = {
-            "X-Api-Key": self.api_key,
-            "Content-Type": "application/json"
-        }
-
-        # 使用 URL 直接生成（不需要先上傳）
-        payload = {
-            "video_inputs": [
-                {
-                    "character": {
-                        "type": "photo_avatar",
-                        "photo_url": image_url  # 使用 photo_url 而不是 image_asset_id
-                    },
-                    "voice": {
-                        "type": "audio",
-                        "audio_url": audio_url  # 使用 audio_url 而不是 audio_asset_id
-                    },
-                    "background": {
-                        "type": "color",
-                        "value": "#FFFFFF"
-                    }
+            # 3. 建立生成任務
+            logger.info("🎥 步驟 4/4: 建立生成任務...")
+            video_id = await self._create_task(
+                voice_input={
+                    "type": "audio", 
+                    "audio_asset_id": audio_asset_id
+                },
+                char_input={
+                    "type": "talking_photo",
+                    "talking_photo_id": avatar_id
                 }
-            ],
-            "dimension": {
-                "width": 1280,
-                "height": 720
-            },
-            "test": False  # 正式生成（非測試模式）
-        }
+            )
+            logger.info(f"✅ 任務建立成功 ID: {video_id}")
 
-        logger.info(f"📤 發送視頻生成請求:")
-        logger.info(f"   圖片 URL: {image_url}")
-        logger.info(f"   音頻 URL: {audio_url}")
+            # 4. 輪詢與下載
+            return await self._poll_and_download(video_id, output_path)
+
+        except Exception as e:
+            logger.error(f"❌ 影片生成流程失敗: {e}")
+            raise
+
+    async def _upload_asset(self, file_path: str, asset_type: str) -> dict:
+        """上傳檔案 (Raw Binary)"""
+        path = Path(file_path)
+        if not path.exists():
+            raise FileNotFoundError(f"找不到檔案: {file_path}")
+
+        try:
+            with open(path, "rb") as f:
+                file_content = f.read()
+        except Exception as e:
+            raise Exception(f"讀取失敗: {e}")
+
+        if not file_content:
+            raise Exception("檔案內容為空")
+
+        mime_type, _ = mimetypes.guess_type(path)
+        if not mime_type:
+            mime_type = "audio/mpeg" if asset_type == "audio" else "image/jpeg"
+
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            try:
+                resp = await client.post(
+                    self.upload_url,
+                    headers={
+                        "X-Api-Key": self.api_key,
+                        "Content-Type": mime_type
+                    },
+                    content=file_content
+                )
+                
+                if resp.status_code != 200:
+                    try:
+                        err = resp.json()
+                        msg = err.get('message', resp.text)
+                    except:
+                        msg = resp.text
+                    raise Exception(f"API Error ({resp.status_code}): {msg}")
+                
+                return resp.json()["data"]
+                
+            except httpx.RequestError as e:
+                raise Exception(f"連線錯誤: {e}")
+
+    async def _create_photo_avatar(self, image_key: str, name: str) -> str:
+        """註冊 Avatar Group"""
+        url = f"{self.base_url}/photo_avatar/avatar_group/create"
+        payload = { "name": name, "image_key": image_key }
 
         async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.post(url, json=payload, headers=headers)
+            resp = await client.post(
+                url,
+                headers={
+                    "X-Api-Key": self.api_key,
+                    "Content-Type": "application/json"
+                },
+                json=payload
+            )
+            
+            if resp.status_code != 200:
+                # 自動清理機制：如果額度滿了，刪除舊的再試
+                error_msg = resp.text
+                if "limit" in error_msg.lower() or "exceeded" in error_msg.lower():
+                    logger.warning("⚠️ Avatar 額度已滿，嘗試清理舊資料...")
+                    await self._cleanup_oldest_avatar()
+                    await asyncio.sleep(2) # 等待刪除生效
+                    return await self._create_photo_avatar(image_key, name) # 重試
 
-            logger.info(f"📥 收到響應: Status {response.status_code}")
-            logger.info(f"📥 響應內容: {response.text}")
+                raise Exception(f"Avatar 註冊失敗: {error_msg}")
 
-            if not response.is_success:
-                logger.error(f"❌ HeyGen API 錯誤: {response.status_code} - {response.text}")
+            return resp.json()["data"]["id"]
 
-            response.raise_for_status()
-
-            data = response.json()
-            video_id = data.get("data", {}).get("video_id")
-
-            if not video_id:
-                raise ValueError("未獲取到 Video ID")
-
-            logger.info(f"🎬 Video 任務創建: {video_id}")
-            return video_id
-
-    async def _create_video(self, image_asset_id: str, audio_asset_id: str) -> str:
-        """創建 Avatar Video 任務（使用 Asset ID）- 舊方法，保留以供兼容"""
-        url = f"{self.base_url}/video/generate"
-        headers = {
-            "X-Api-Key": self.api_key,
-            "Content-Type": "application/json"
-        }
-
-        # 使用 asset_id 而不是 avatar_id 和 audio_url
-        payload = {
-            "video_inputs": [
-                {
-                    "character": {
-                        "type": "photo_avatar",
-                        "image_asset_id": image_asset_id
-                    },
-                    "voice": {
-                        "type": "audio",
-                        "audio_asset_id": audio_asset_id
-                    },
-                    "background": {
-                        "type": "color",
-                        "value": "#FFFFFF"
-                    }
-                }
-            ],
-            "dimension": {
-                "width": 1280,
-                "height": 720
-            },
-            "test": False  # 正式生成（非測試模式）
-        }
-
+    async def _cleanup_oldest_avatar(self):
+        """清理最舊的 Avatar"""
+        list_url = f"{self.base_url}/photo_avatars" # 或 /v2/photo_avatars
         async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.post(url, json=payload, headers=headers)
-            response.raise_for_status()
+            resp = await client.get(list_url, headers={"X-Api-Key": self.api_key})
+            if resp.status_code == 200:
+                avatars = resp.json().get("data", {}).get("avatars", [])
+                if avatars:
+                    target_id = avatars[-1]["id"] # 刪除最後一個（通常是最舊的）
+                    logger.info(f"🗑️ 刪除舊 Avatar: {target_id}")
+                    await client.delete(
+                        f"{self.base_url}/photo_avatar/{target_id}", 
+                        headers={"X-Api-Key": self.api_key}
+                    )
 
-            data = response.json()
-            video_id = data.get("data", {}).get("video_id")
+    async def _create_task(self, voice_input: dict, char_input: dict) -> str:
+        """建立生成任務"""
+        payload = {
+            "video_inputs": [{
+                "character": char_input,
+                "voice": voice_input,
+            }],
+            "dimension": {"width": 1280, "height": 720}
+        }
+        
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(
+                f"{self.base_url}/video/generate",
+                headers={
+                    "X-Api-Key": self.api_key, 
+                    "Content-Type": "application/json"
+                },
+                json=payload
+            )
+            
+            if resp.status_code != 200:
+                try:
+                    err = resp.json()
+                    msg = err.get('error', {}).get('message', resp.text)
+                except:
+                    msg = resp.text
+                raise Exception(f"建立任務失敗: {msg}")
+            
+            return resp.json()["data"]["video_id"]
 
-            if not video_id:
-                raise ValueError("未獲取到 Video ID")
-
-            logger.info(f"🎬 Video 任務創建: {video_id}")
-            return video_id
-
-    async def _poll_video_status(self, video_id: str, max_wait: int = 600) -> str:
-        """
-        輪詢影片生成狀態
-
-        Args:
-            video_id: 影片 ID
-            max_wait: 最長等待時間（秒），預設 10 分鐘
-
-        Returns:
-            影片 URL
-        """
+    async def _poll_and_download(self, video_id: str, output_path: Path) -> str:
         url = f"{self.base_url}/video/{video_id}"
         headers = {"X-Api-Key": self.api_key}
+        
+        logger.info(f"⏳ 開始輪詢 {video_id}...")
+        
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            for i in range(60):
+                try:
+                    resp = await client.get(url, headers=headers)
+                    if resp.status_code != 200:
+                        await asyncio.sleep(10)
+                        continue
 
-        start_time = asyncio.get_event_loop().time()
+                    data = resp.json().get("data", {})
+                    status = data.get("status")
+                    
+                    if status == "completed":
+                        video_url = data["video_url"]
+                        logger.info("📥 下載影片...")
+                        dl_resp = await client.get(video_url, timeout=600.0)
+                        with open(output_path, "wb") as f:
+                            f.write(dl_resp.content)
+                        logger.info(f"✅ 儲存至: {output_path}")
+                        return str(output_path)
+                    
+                    elif status == "failed":
+                        error = data.get('error')
+                        raise Exception(f"HeyGen 處理失敗: {error}")
+                    
+                    if i % 2 == 0:
+                        logger.info(f"⏳ 生成中... ({status})")
+                    
+                    await asyncio.sleep(10)
+                    
+                except httpx.RequestError:
+                    await asyncio.sleep(10)
+                
+        raise TimeoutError("生成超時")
 
-        while True:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(url, headers=headers)
-                response.raise_for_status()
-
-                data = response.json()
-                status = data.get("data", {}).get("status")
-
-                if status == "completed":
-                    video_url = data.get("data", {}).get("video_url")
-                    if not video_url:
-                        raise ValueError("未獲取到影片 URL")
-                    logger.info(f"✅ 影片生成完成")
-                    return video_url
-
-                elif status == "failed":
-                    error = data.get("data", {}).get("error", "未知錯誤")
-                    raise Exception(f"影片生成失敗: {error}")
-
-                # 檢查超時
-                elapsed = asyncio.get_event_loop().time() - start_time
-                if elapsed > max_wait:
-                    raise TimeoutError(f"影片生成超時（超過 {max_wait} 秒）")
-
-                # 顯示進度
-                logger.info(f"⏳ 影片生成中... ({status})")
-                await asyncio.sleep(10)  # 每 10 秒檢查一次
-
-    async def _download_video(self, video_url: str, output_path: Path):
-        """下載影片"""
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            response = await client.get(video_url)
-            response.raise_for_status()
-
-            with open(output_path, "wb") as f:
-                f.write(response.content)
-
-            logger.info(f"📥 影片下載完成: {output_path}")
-
-    async def get_avatar_list(self) -> list:
-        """獲取已創建的 Avatar 列表"""
-        if not self.api_key:
-            raise ValueError("HeyGen API Key 未設定")
-
-        try:
-            url = f"{self.base_url}/avatars"
-            headers = {"X-Api-Key": self.api_key}
-
-            async with httpx.AsyncClient() as client:
-                response = await client.get(url, headers=headers)
-                response.raise_for_status()
-
-                data = response.json()
-                avatars = data.get("data", {}).get("avatars", [])
-                return avatars
-
-        except Exception as e:
-            logger.error(f"❌ 獲取 Avatar 列表失敗: {e}")
-            raise
+    async def get_avatar_list(self):
+        return []

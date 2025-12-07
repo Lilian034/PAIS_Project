@@ -61,6 +61,9 @@ STAFF_AGENT_PROMPT = """
 **可用工具 (Tools):**
 {tools}
 
+**可用工具名單 (Tool Names):**
+{tool_names}
+
 **對話歷史 (Memory):**
 {chat_history}
 

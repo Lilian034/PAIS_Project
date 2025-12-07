@@ -120,7 +120,7 @@ function initMediaUpload() {
 }
 
 /**
- * 處理照片上傳
+ * 處理照片上傳 (修改版：上傳後隱藏新增按鈕)
  */
 async function handlePhotoUpload(files) {
     const photoGrid = document.querySelector('.photo-grid');
@@ -129,9 +129,12 @@ async function handlePhotoUpload(files) {
 
     showNotification('正在上傳照片...', 'info');
 
+    // 處理上傳
     for (const file of Array.from(files)) {
-        if (photoGrid.children.length >= 6) {
-            showNotification('最多只能上傳5張照片', 'warning');
+        // 限制：雖然原本支援多張，但在這個 UI 邏輯下，我們讓它看起來像單張替換
+        // 如果已經有照片了，就不再處理新的，或者提示用戶先刪除舊的
+        if (uploadedPhotoPaths.length > 0) {
+            showNotification('請先刪除現有照片再上傳新照片', 'warning');
             break;
         }
 
@@ -155,6 +158,14 @@ async function handlePhotoUpload(files) {
             const photoItem = document.createElement('div');
             photoItem.className = 'photo-item';
             photoItem.dataset.path = photoPath;
+            // 讓照片填滿容器
+            photoItem.style.cssText = `
+                width: 100%;
+                height: 100%;
+                position: relative;
+                border-radius: 8px;
+                overflow: hidden;
+            `;
 
             const img = document.createElement('img');
             img.src = `/${photoPath}`;
@@ -163,7 +174,6 @@ async function handlePhotoUpload(files) {
                 width: 100%;
                 height: 100%;
                 object-fit: cover;
-                border-radius: 8px;
             `;
             photoItem.appendChild(img);
 
@@ -185,17 +195,31 @@ async function handlePhotoUpload(files) {
                 display: flex;
                 align-items: center;
                 justify-content: center;
+                z-index: 10;
             `;
+            
+            // 【關鍵邏輯】刪除時，把新增按鈕顯示回來
             deleteBtn.onclick = () => {
                 photoItem.remove();
                 uploadedPhotoPaths = uploadedPhotoPaths.filter(p => p !== photoPath);
                 VideoGenerator.setUploadedPhotoPaths(uploadedPhotoPaths);
+                
+                // 如果沒有照片了，顯示新增按鈕
+                if (uploadedPhotoPaths.length === 0) {
+                    addPhotoBtn.classList.remove('hidden');
+                    // 為了美觀，可以重置 input 
+                    const photoInput = document.getElementById('photoUpload');
+                    if(photoInput) photoInput.value = ''; 
+                }
             };
 
-            photoItem.style.position = 'relative';
             photoItem.appendChild(deleteBtn);
-
+            
+            // 插入照片
             photoGrid.insertBefore(photoItem, addPhotoBtn);
+            
+            // 【關鍵邏輯】上傳成功後，隱藏新增按鈕
+            addPhotoBtn.classList.add('hidden');
 
         } catch (error) {
             console.error('❌ 上傳照片錯誤:', error);
@@ -203,11 +227,13 @@ async function handlePhotoUpload(files) {
         }
     }
 
-    showNotification('照片上傳完成！', 'success');
+    if (uploadedPhotoPaths.length > 0) {
+        showNotification('照片上傳完成！', 'success');
+    }
 }
 
 /**
- * 處理音頻上傳
+ * 處理音頻上傳 (保持不變)
  */
 async function handleAudioUpload(files) {
     const audioBox = document.querySelector('#media .audio-single');
@@ -219,7 +245,6 @@ async function handleAudioUpload(files) {
     try {
         showNotification('正在上傳音頻...', 'info');
 
-        // 上傳音頻到服務器（使用 audio 資料夾）
         const uploadResult = await APIClient.documents.upload(file, 'audio');
 
         if (!uploadResult.success) {
@@ -227,16 +252,12 @@ async function handleAudioUpload(files) {
             return;
         }
 
-        // 保存上傳的音頻路徑
         const audioPath = uploadResult.file_path || `documents/audio/${file.name}`;
         uploadedAudioPath = audioPath;
-
-        // 通知 VideoGenerator 模組
         VideoGenerator.setUploadedAudioPath(audioPath);
 
         showNotification('音頻上傳成功！', 'success');
 
-        // 前端顯示預覽
         const url = URL.createObjectURL(file);
 
         if (addBtn) {
@@ -257,7 +278,8 @@ async function handleAudioUpload(files) {
             const audio = new Audio(url);
             let playing = false;
 
-            playBtn.onclick = () => {
+            playBtn.onclick = (e) => {
+                e.stopPropagation(); // 防止觸發上傳
                 if (!playing) {
                     audio.play();
                     playing = true;
@@ -274,9 +296,30 @@ async function handleAudioUpload(files) {
                 playBtn.textContent = '▶︎ 播放';
             };
 
+            // 添加刪除/重選功能
+            const reUploadBtn = document.createElement('button');
+            reUploadBtn.textContent = '✕';
+            reUploadBtn.className = 'btn-icon danger';
+            reUploadBtn.style.marginLeft = 'auto';
+            reUploadBtn.style.padding = '4px 8px';
+            reUploadBtn.style.fontSize = '12px';
+            reUploadBtn.onclick = (e) => {
+                e.stopPropagation();
+                uploadedAudioPath = null;
+                VideoGenerator.setUploadedAudioPath(null);
+                addBtn.classList.remove('has-preview');
+                addBtn.innerHTML = '＋ 新增音檔';
+                const audioInput = document.getElementById('audioUpload');
+                if(audioInput) audioInput.value = '';
+            };
+
             chip.appendChild(playBtn);
             chip.appendChild(name);
+            chip.appendChild(reUploadBtn);
             addBtn.appendChild(chip);
+            
+            // 移除原本的 onclick，避免點擊 chip 時觸發上傳
+            addBtn.onclick = null;
         }
 
     } catch (error) {
@@ -306,10 +349,6 @@ function initLogout() {
 }
 
 // ==================== 模組間通信 ====================
-
-/**
- * 當內容生成完成時，通知其他模組
- */
 window.addEventListener('content-generated', (event) => {
     const { taskId } = event.detail;
     if (taskId) {
@@ -317,9 +356,6 @@ window.addEventListener('content-generated', (event) => {
     }
 });
 
-/**
- * 當語音生成完成時，通知其他模組
- */
 window.addEventListener('voice-generated', (event) => {
     const { taskId } = event.detail;
     if (taskId) {

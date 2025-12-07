@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登入 - 政務分身管理系統</title>
+    <link rel="stylesheet" href="admin.css"> 
+</head>
+<body class="login-page"> 
+    <div class="login-container">
+
+        <div class="login-panel">
+            
+            <header class="login-logo">
+                <div class="nav-brand login-brand">
+                    <div class="nav-title">
+                        <h2>政務分身管理系統</h2>
+                    </div>
+                </div>
+            </header>
+
+            <h1 class="welcome-title">歡迎回來</h1>
+            
+            <form class="login-form" action="/login" method="POST">
+                
+                <div class="form-group">
+                    <input type="text" id="username" class="form-control" placeholder="使用者帳號" required autocomplete="username">
+                </div>
+
+                <div class="form-group">
+                    <input type="password" id="password" class="form-control" placeholder="密碼" required autocomplete="current-password">
+                </div>
+
+                <div class="login-options">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="rememberMe" name="rememberMe">
+                        <label for="rememberMe">保持登入狀態</label>
+                    </div>
+                    <a href="#" class="forgot-password-link">忘記密碼?</a>
+                </div>
+
+                <button type="submit" class="login-btn">
+                    登 入
+                    <span style="font-size: 20px;">→</span> </button>
+            </form>
+
+            <footer class="signup-link-area">
+                如遇登入問題，請聯繫系統管理員。
+            </footer>
+        </div>
+
+        <div class="visual-panel">
+            </div>
+
+    </div>
+</body>
+</html>
