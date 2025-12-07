@@ -103,6 +103,23 @@ class APIClient {
         },
 
         /**
+         * 直接建立內容（不經過AI生成，用於語音生成）
+         * @param {string} text - 直接輸入的文字內容
+         */
+        async createDirectContent(text) {
+            try {
+                const data = await request(`${API_CONFIG.staffURL}/content/direct`, {
+                    method: 'POST',
+                    body: { topic: text, style: 'speech', length: 'medium' },
+                    requireAuth: true
+                });
+                return { success: true, ...data };
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
+        },
+
+        /**
          * 校稿
          */
         async proofread(text, sessionId = null, isFirstMessage = false) {
