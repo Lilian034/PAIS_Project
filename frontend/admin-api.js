@@ -143,7 +143,7 @@ async function generateVoice(taskId) {
 async function generateVideo(taskId, imagePath, prompt = null) {
     try {
         const queryParams = `image_path=${encodeURIComponent(imagePath)}${prompt ? '&prompt=' + encodeURIComponent(prompt) : ''}`;
-        const data = await adminApiRequest(`${STAFF_API_URL}/media/avatar-video/${taskId}?${queryParams}`, {
+        const data = await adminApiRequest(`${STAFF_API_URL}/media/video/${taskId}?${queryParams}`, {
             method: 'POST',
             requireAuth: true
         });

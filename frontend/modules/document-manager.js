@@ -84,10 +84,17 @@ function initSearch() {
  */
 function initSort() {
     const sortSelect = $('#documentSort');
-    if (!sortSelect) return;
+    const applyBtn = $('#applySortBtn');
 
+    if (!sortSelect || !applyBtn) return;
+
+    // 選擇排序方式時只更新變量，不立即載入
     sortSelect.addEventListener('change', (e) => {
         documentSortMode = e.target.value;
+    });
+
+    // 點擊「套用」按鈕時才載入
+    applyBtn.addEventListener('click', () => {
         loadDocuments();
     });
 }
@@ -204,6 +211,10 @@ async function handleUpload(files) {
 
     if (totalFiles === 0) return;
 
+    // 獲取當前選擇的資料夾
+    const folderSelect = $('#uploadFolder');
+    const selectedFolder = folderSelect ? folderSelect.value : '';
+
     showNotification(`開始上傳 ${totalFiles} 個文件...`, 'info');
 
     let successCount = 0;
@@ -213,7 +224,7 @@ async function handleUpload(files) {
         const file = files[i];
 
         try {
-            const result = await APIClient.documents.uploadDocument(file);
+            const result = await APIClient.documents.uploadDocument(file, selectedFolder);
 
             if (result.success) {
                 successCount++;
@@ -426,11 +437,13 @@ async function loadFolders() {
         });
 
         const folderList = $('#uploadFolder');
-        if (folderList && folders.size > 0) {
-            folderList.innerHTML = Array.from(folders).sort()
-                .map(folder => `
-                    <option value="${escapeHtml(folder)}">${escapeHtml(folder)}</option>
-                `).join('');
+        if (folderList) {
+            // 保留根目錄選項，添加動態資料夾
+            const rootOption = '<option value="">根目錄 (documents/)</option>';
+            const folderOptions = Array.from(folders).sort()
+                .map(folder => `<option value="${escapeHtml(folder)}">${escapeHtml(folder)}</option>`)
+                .join('');
+            folderList.innerHTML = rootOption + folderOptions;
         }
     } catch (error) {
         console.error('❌ 載入資料夾列表失敗:', error);
