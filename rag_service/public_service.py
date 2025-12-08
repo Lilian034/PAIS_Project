@@ -74,10 +74,9 @@ app.add_middleware(
 )
 
 # ==================== LangChain 初始化 ====================
-
 # Gemini LLM
 llm = GoogleGenerativeAI(
-    model="gemini-2.0-flash",
+    model="gemini-1.5-flash-001",
     google_api_key=GEMINI_API_KEY,
     temperature=0.7,
     max_output_tokens=2048
