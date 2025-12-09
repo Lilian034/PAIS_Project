@@ -8,7 +8,7 @@ from langchain.agents import create_react_agent, Tool, AgentExecutor
 from langchain.prompts import PromptTemplate
 from loguru import logger
 from .memory_manager import StaffMemoryManager
-# 匯入新的 Agent Prompt
+# 匯入 Agent Prompt
 from prompts import CONTENT_GENERATION_AGENT_PROMPT
 
 class ContentGenerator:
@@ -19,14 +19,12 @@ class ContentGenerator:
     
     def __init__(self, memory_manager: StaffMemoryManager):
         self.memory_manager = memory_manager
-        
         # 1. 初始化 LLM
         self.llm = ChatGoogleGenerativeAI(
-            model="gemini-1.5-flash",
+            model="gemini-1.5-flash-001",
             google_api_key=os.getenv("GEMINI_API_KEY"),
             temperature=0.4,
-            max_output_tokens=2048,
-            convert_system_message_to_human=True
+            max_output_tokens=2048
         )
         
         # 2. 初始化 Embeddings
@@ -54,7 +52,7 @@ class ContentGenerator:
             )
         ]
         
-        # 5. 初始化 Agent (使用統一管理的 Prompt)
+        # 5. 初始化 Agent
         self.prompt = PromptTemplate(
             template=CONTENT_GENERATION_AGENT_PROMPT,
             input_variables=["input", "chat_history", "agent_scratchpad", "tools", "tool_names"]
@@ -92,6 +90,7 @@ class ContentGenerator:
     async def generate(self, task_id: str, topic: str, style: str, length: str) -> str:
         """執行文案生成 (Agent 流程)"""
         try:
+            # 這裡會呼叫 self.memory_manager，如果 __init__ 沒設定好就會報錯
             memory = self.memory_manager.get_memory(task_id)
             history = memory.load_memory_variables({})["chat_history"]
 
